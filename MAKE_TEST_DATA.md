@@ -442,12 +442,11 @@ library(ars)
 
 ---
 
-> **Note on the pipe:** `run()` returns the ARD only — the shell is not
-> carried through. In the step-by-step form you must hold the hydrated shell
-> in a variable and pass it explicitly to `render()`. The `ars_pipeline()`
-> form handles this internally and is the recommended approach for scripts.
-> Fixing the pipe so it works naturally end-to-end is tracked in
-> `PLAN_DATA_DRIVEN_GROUPS.md` as a future design improvement.
+> **Note on the pipe:** The full pipe (`use_shell() |> hydrate() |> run() |>
+> render()`) works end-to-end. `run()` returns an `ArsResult` bundle carrying
+> both the ARD and shell, which `render()` unpacks automatically. The
+> step-by-step form below is kept for cases where you want to inspect or reuse
+> the ARD or shell object directly.
 
 ---
 
@@ -457,14 +456,12 @@ Analyses: AGE (continuous), SEX and RACE (categorical frequencies).
 Dataset: ADSL only.
 
 ```r
-# Step-by-step — hold shell in variable, pass to render() explicitly
-shell_dm01 <- use_shell("T-DM-01") |>
-  hydrate(
-    variable_map = c(TRT01A = "TRT01A", SAFFL = "SAFFL",
-                     AGE = "AGE", SEX = "SEX", RACE = "RACE")
-  )
-ard_dm01 <- run(shell_dm01, adam = list(ADSL = adsl))
-render(ard_dm01, shell_dm01, backend = "tfrmt")
+# Pipe
+use_shell("T-DM-01") |>
+  hydrate(variable_map = c(TRT01A = "TRT01A", SAFFL = "SAFFL",
+                            AGE = "AGE", SEX = "SEX", RACE = "RACE")) |>
+  run(adam = list(ADSL = adsl)) |>
+  render(backend = "tfrmt")
 
 # ars_pipeline() equivalent
 ars_pipeline(
@@ -484,15 +481,13 @@ Analyses: randomised, treated, completed, and each discontinuation reason.
 Dataset: ADSL only.
 
 ```r
-# Step-by-step
-shell_ds01 <- use_shell("T-DS-01") |>
-  hydrate(
-    variable_map = c(TRT01A = "TRT01A", RANDFL = "RANDFL",
-                     SAFFL = "SAFFL", COMPLFL = "COMPLFL",
-                     DCSREAS = "DCSREAS")
-  )
-ard_ds01 <- run(shell_ds01, adam = list(ADSL = adsl))
-render(ard_ds01, shell_ds01, backend = "tfrmt")
+# Pipe
+use_shell("T-DS-01") |>
+  hydrate(variable_map = c(TRT01A = "TRT01A", RANDFL = "RANDFL",
+                            SAFFL = "SAFFL", COMPLFL = "COMPLFL",
+                            DCSREAS = "DCSREAS")) |>
+  run(adam = list(ADSL = adsl)) |>
+  render(backend = "tfrmt")
 
 # ars_pipeline() equivalent
 ars_pipeline(
@@ -514,16 +509,14 @@ fatal. Denominator (N) taken from ADSL safety population.
 Datasets: ADAE + ADSL.
 
 ```r
-# Step-by-step
-shell_ae01 <- use_shell("T-AE-01") |>
-  hydrate(
-    variable_map = c(TRT01A = "TRT01A", SAFFL = "SAFFL",
-                     TRTEMFL = "TRTEMFL", AEREL = "AEREL",
-                     AESER = "AESER", AETOXGR = "AETOXGR",
-                     AEACN = "AEACN", AEOUT = "AEOUT")
-  )
-ard_ae01 <- run(shell_ae01, adam = list(ADAE = adae, ADSL = adsl))
-render(ard_ae01, shell_ae01, backend = "tfrmt")
+# Pipe
+use_shell("T-AE-01") |>
+  hydrate(variable_map = c(TRT01A = "TRT01A", SAFFL = "SAFFL",
+                            TRTEMFL = "TRTEMFL", AEREL = "AEREL",
+                            AESER = "AESER", AETOXGR = "AETOXGR",
+                            AEACN = "AEACN", AEOUT = "AEOUT")) |>
+  run(adam = list(ADAE = adae, ADSL = adsl)) |>
+  render(backend = "tfrmt")
 
 # ars_pipeline() equivalent
 ars_pipeline(
@@ -545,15 +538,13 @@ Analyses: subject counts and percentages per SOC and PT.
 Datasets: ADAE + ADSL.
 
 ```r
-# Step-by-step
-shell_ae02 <- use_shell("T-AE-02") |>
-  hydrate(
-    variable_map = c(TRT01A = "TRT01A", SAFFL = "SAFFL",
-                     TRTEMFL = "TRTEMFL",
-                     AEBODSYS = "AEBODSYS", AEDECOD = "AEDECOD")
-  )
-ard_ae02 <- run(shell_ae02, adam = list(ADAE = adae, ADSL = adsl))
-render(ard_ae02, shell_ae02, backend = "tfrmt")
+# Pipe
+use_shell("T-AE-02") |>
+  hydrate(variable_map = c(TRT01A = "TRT01A", SAFFL = "SAFFL",
+                            TRTEMFL = "TRTEMFL",
+                            AEBODSYS = "AEBODSYS", AEDECOD = "AEDECOD")) |>
+  run(adam = list(ADAE = adae, ADSL = adsl)) |>
+  render(backend = "tfrmt")
 
 # ars_pipeline() equivalent
 ars_pipeline(
@@ -575,15 +566,13 @@ baseline for each of 7 lab parameters.
 Datasets: ADLB + ADSL.
 
 ```r
-# Step-by-step
-shell_lb01 <- use_shell("T-LB-01") |>
-  hydrate(
-    variable_map = c(TRT01A = "TRT01A", SAFFL = "SAFFL",
-                     PARAMCD = "PARAMCD", ANL01FL = "ANL01FL",
-                     ABLFL = "ABLFL", AVAL = "AVAL", CHG = "CHG")
-  )
-ard_lb01 <- run(shell_lb01, adam = list(ADLB = adlb, ADSL = adsl))
-render(ard_lb01, shell_lb01, backend = "tfrmt")
+# Pipe
+use_shell("T-LB-01") |>
+  hydrate(variable_map = c(TRT01A = "TRT01A", SAFFL = "SAFFL",
+                            PARAMCD = "PARAMCD", ANL01FL = "ANL01FL",
+                            ABLFL = "ABLFL", AVAL = "AVAL", CHG = "CHG")) |>
+  run(adam = list(ADLB = adlb, ADSL = adsl)) |>
+  render(backend = "tfrmt")
 
 # ars_pipeline() equivalent
 ars_pipeline(
@@ -605,15 +594,13 @@ category (Low / Normal / High) for HGB, ALT, and CREAT.
 Datasets: ADLB + ADSL.
 
 ```r
-# Step-by-step
-shell_lb02 <- use_shell("T-LB-02") |>
-  hydrate(
-    variable_map = c(TRT01A = "TRT01A", SAFFL = "SAFFL",
-                     PARAMCD = "PARAMCD", ANL01FL = "ANL01FL",
-                     BNRIND = "BNRIND", WGRNRIND = "WGRNRIND")
-  )
-ard_lb02 <- run(shell_lb02, adam = list(ADLB = adlb, ADSL = adsl))
-render(ard_lb02, shell_lb02, backend = "tfrmt")
+# Pipe
+use_shell("T-LB-02") |>
+  hydrate(variable_map = c(TRT01A = "TRT01A", SAFFL = "SAFFL",
+                            PARAMCD = "PARAMCD", ANL01FL = "ANL01FL",
+                            BNRIND = "BNRIND", WGRNRIND = "WGRNRIND")) |>
+  run(adam = list(ADLB = adlb, ADSL = adsl)) |>
+  render(backend = "tfrmt")
 
 # ars_pipeline() equivalent
 ars_pipeline(

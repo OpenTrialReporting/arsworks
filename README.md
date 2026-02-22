@@ -62,17 +62,15 @@ library(ars)
 
 There are two equivalent patterns for generating a table.
 
-**Pattern A — pipe workflow** (recommended when you need the shell object for
-further inspection or custom rendering):
+**Pattern A — pipe workflow** (recommended for interactive use):
 
 ```r
-shell <- use_shell("T-AE-02") |>
+use_shell("T-AE-02") |>
   hydrate(variable_map = c(TRT01A = "TRT01A", SAFFL = "SAFFL",
                             TRTEMFL = "TRTEMFL",
-                            AEBODSYS = "AEBODSYS", AEDECOD = "AEDECOD"))
-
-ard <- run(shell, adam = list(ADAE = adae, ADSL = adsl))
-render(ard, shell, backend = "tfrmt")
+                            AEBODSYS = "AEBODSYS", AEDECOD = "AEDECOD")) |>
+  run(adam = list(ADAE = adae, ADSL = adsl)) |>
+  render(backend = "tfrmt")
 ```
 
 **Pattern B — `ars_pipeline()`** (simpler for scripts):
@@ -87,11 +85,6 @@ ars_pipeline(
   backend      = "tfrmt"
 )
 ```
-
-> **Note:** `run()` returns only the ARD; the shell object is not carried
-> through the pipe. Always assign the hydrated shell to a variable before
-> calling `run()`, then pass it explicitly to `render()`. `ars_pipeline()`
-> handles this internally.
 
 ### Available shells
 
