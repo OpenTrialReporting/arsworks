@@ -1,0 +1,1059 @@
+# arsworks MASTER PLAN
+**Date:** 2026-02-22  
+**Author:** Lovemore Gakava  
+**Status:** ACTIVE  
+**Scope:** arscore, arsshells, arsresult, arstlf, ars (tests + docs in each)  
+**Version:** 3 (consolidated from PLAN_DATA_DRIVEN_GROUPS.md, ARS_DEVELOPMENT_PLAN.md, ARSSHELLS_PLAN.md, NEXT_STEPS.md)  
+**File:** `MASTER_PLAN.md` — the single authoritative orchestration document for the arsworks suite
+
+> All per-package planning files (`ARS_DEVELOPMENT_PLAN.md`, `ARSSHELLS_PLAN.md`,
+> `NEXT_STEPS.md`, `format_improvement_plan.md`) have been merged here and replaced
+> with redirect notices. Do not maintain separate planning files in sub-packages.
+
+---
+
+## 0. Current State (as of 2026-02-22, updated 2026-02-22 evening)
+
+### Suite overview
+
+```
+arscore    ← Foundation: S7 classes, JSON I/O, validation, ARD extraction
+    ↓
+arsshells  ← Builder/Factory: DSL that constructs arscore objects from templates
+    ↓                   ↘
+arsresult  ← Executor: Method Registry + WhereClause transpiler → ARD from ADaM
+    ↓                   ↙
+arstlf     ← Translator: arscore display metadata + ARD → tfrmt / gt → TLF files
+    ↓
+ars        ← Orchestrator: pipe-friendly workflow API, selective re-exports
+```
+
+### Per-package status
+
+| Package | Version | Tests | Status |
+|---------|---------|-------|--------|
+| arscore | v0.1.0 | ~609 test blocks | ✅ Complete; `is_total` on `ars_group` done |
+| arsshells | v0.1.0 | ~214 test blocks | ✅ Phase A1–A7 complete; 6/55 templates installed; `hydrate()` Phases 2–5 implemented |
+| arsresult | v0.1.0 | ~143 test blocks | ✅ Phase A8–A11 bug fixes complete |
+| arstlf | v0.1.0 | ~56 test blocks | ✅ Phase 4b complete; tfrmt backend only |
+| ars | v0.1.0 | ~31 test blocks (54 pass) | ✅ Phase A complete; all integration tests hydrated and passing |
+
+### Completed work by package
+
+**arscore** — all 41 ARS v1.0 S7 entities, JSON round-trip, referential integrity
+validation, ARD extraction, `group_id` on `ars_ordered_grouping_factor`,
+`is_total` property on `ars_group` (Step A1),
+document/terminology/programming code/compound expression/categorisation/
+global display section/list-of-contents classes, vignettes, pkgdown, GitHub Actions.
+
+**arsshells** — `Shell`/`ShellSection`/`ShellCell` S7 classes wrapping
+`ars_reporting_event`, `validate_shell()`, `use_shell()`, `browse_shells()`,
+`hydrate()` with full Phase A interface (`variable_map`, `label_map`,
+`group_map` (Phase 2), `adam` (Phase 3), `subset_map` (Phase 4),
+`metadata` (Phase 5), `section_map` placeholder (Phase 6)),
+`hydrate_helpers.R` with `._hydrate_outputs()` bottom-up rebuild,
+55-shell index.json, JSON schema,
+6 Priority 1 templates (T-DM-01, T-DS-01, T-AE-01, T-AE-02, T-LB-01, T-LB-02)
+updated for Phase A (arm conditions stripped, `isTotal` added, `groupId: null`
+fixed, `dataDriven` markers set, top-level decorative arrays removed),
+vignette, pkgdown, GitHub Actions.
+
+**arsresult** — WhereClause transpiler (all 8 comparators, compound AND/OR),
+method registry with `register_method()`, stdlib (METH_CONT, METH_FREQ,
+METH_CAT, METH_AE_FREQ), `run()` pipeline (analysis-set filter → arm filter →
+denominator → data-subset filter → method dispatch → ARD), `ArsResult` bundle
+enabling pipe (`run() |> render()`),
+Phase A bug fixes complete: denominator `tryCatch` now warns instead of silent
+fallback (A8), `.make_c()` always wraps single values in `c()` (A9),
+unhydrated non-Total conditionless groups warn at `run()` time (A10),
+unnamed method return values warn and are discarded (A11),
+vignette, pkgdown, GitHub Actions.
+
+**arstlf** — `render()` with tfrmt backend, `render_mock()`, `build_tfrmt()`,
+`prep_ard_for_tfrmt()`, ARS→tfrmt mapping spec, N=xx column header resolution
+at render time, vignette, pkgdown, GitHub Actions.
+
+**ars** — `ars_pipeline()`, selective re-exports of the full workflow API,
+`ArsResult` S3 class enabling the clean pipe pattern, unit + integration tests,
+vignettes, pkgdown, GitHub Actions.
+
+### Installed templates (6 / 55)
+
+| ID | Name | Dataset | Analyses |
+|----|------|---------|----------|
+| T-DM-01 | Summary of Demographic Characteristics | ADSL | 18 |
+| T-DS-01 | Subject Disposition | ADSL | 27 |
+| T-AE-01 | Overview of Adverse Events | ADAE | 21 |
+| T-AE-02 | TEAEs by SOC and PT | ADAE | 33 |
+| T-LB-01 | Summary of Laboratory Parameters | ADLB | 168 |
+| T-LB-02 | Shift Table — Lab Values | ADLB | 81 |
+
+### GitHub Pages
+
+All 5 repos are currently **private**. pkgdown workflows build the site and
+upload it as a downloadable Actions artifact on every push to `main`.
+
+To enable live hosting when repos go public:
+1. In each repo Settings → Pages, set Source to `gh-pages` branch.
+2. Uncomment the deploy step in `.github/workflows/pkgdown.yml`.
+3. Use an org-scoped PAT secret — `GITHUB_TOKEN` only has access to the
+   current repo, not sibling private repos.
+
+| Package | URL (once public) |
+|---------|-------------------|
+| arscore | https://opentrialreporting.github.io/arscore/ |
+| arsshells | https://opentrialreporting.github.io/arsshells/ |
+| arsresult | https://opentrialreporting.github.io/arsresult/ |
+| arstlf | https://opentrialreporting.github.io/arstlf/ |
+| ars | https://opentrialreporting.github.io/ars/ |
+
+### Developer quick reference
+
+```r
+# Load and test any package
+devtools::load_all("arscore")
+devtools::test("arscore")
+
+# Test a specific file
+testthat::test_file("arsresult/tests/testthat/test-stdlib.R")
+
+# Document and install
+devtools::document("ars")
+
+# Full suite install (dependency order)
+for (pkg in c("arscore", "arsresult", "arsshells", "arstlf", "ars")) {
+  install.packages(file.path("path/to/arsworks", pkg), repos = NULL, type = "source")
+}
+
+# Build pkgdown site locally
+withr::with_dir("ars", pkgdown::build_site(preview = FALSE, new_process = FALSE))
+```
+
+---
+
+> **Ordering constraint — template staging:**  
+> The 6 JSON template updates (Step A2) strip hardcoded arm condition values.
+> Once merged, existing `hydrate()` calls without `group_map` will produce
+> empty groups — a **breaking change** for current users.  
+> Template changes must be **merged on a feature branch** and held until either:
+> (a) Phase C bundled data is ready and the README examples are updated, or  
+> (b) the README examples are simultaneously updated to use `group_map` with
+> the synthetic test-data values (`"Treatment A"`, `"Treatment B"`).  
+> All other Phase A steps can merge independently.
+
+> **Architecture decision confirmed:**  
+> Display metadata (titles, footnotes, abbreviations) uses **Option A —
+> inline `ars_display_sub_section` objects only**. Global display sections
+> (`sub_section_id` references) are deferred to a future release and passed
+> through unchanged by `._hydrate_outputs()`.
+
+---
+
+## 1. Problem Statement
+
+All 6 installed shell templates have **three classes** of hardcoding problem:
+
+### 1.1 Column dimension — grouping filter values
+
+Treatment arm filter values (`TRT01A == "Treatment A"`) are baked into the
+template JSON. Every study has different treatment labels. The current
+`hydrate()` can remap variable *names* and display *labels* but never touches
+condition *values*. A study whose `TRT01A` values are `"Placebo"` and
+`"Xanomeline High Dose"` will produce **empty groups** at execution time with
+no error or warning.
+
+### 1.2 Row/section dimension — data-subset filter values and section coverage
+
+Templates like T-LB-01 hardcode which lab parameters appear (7 PARAMCDs, 168
+analyses). A real study has 40+. T-AE-02 hardcodes SOCs and PTs that are
+entirely data-driven. T-DM-01 hardcodes race levels that vary by study and
+region.
+
+**Additionally**, data-subset filter *values* are hardcoded. Conditions such
+as `AEREL IN ["PROBABLE", "POSSIBLE", "RELATED"]` or `AETOXGR GE ["3"]` are
+specific to the coding conventions of a given study. A study that codes drug
+relationship as `"YES"` / `"NO"` will produce empty results from `DS_TEAE_REL`
+with no error. This is the same class of silent failure as the arm filter
+problem.
+
+### 1.3 Display metadata — titles, footnotes, abbreviations
+
+Titles, footnotes, and abbreviations are buried **seven levels deep** in the
+ARS class hierarchy:
+
+```
+ars_reporting_event → ars_output → ars_ordered_display
+  → ars_output_display → ars_display_section
+    → ars_ordered_display_sub_section → ars_display_sub_section@text
+```
+
+The current `hydrate()` explicitly passes the outputs subtree through
+unchanged. There is no mechanism to set or override display text at the
+`hydrate()` call. Developers either leave template boilerplate titles in place
+or must manually construct the full seven-level hierarchy from scratch.
+
+Additionally, the JSON templates contain top-level `"titles"`, `"footnotes"`,
+and `"abbreviations"` arrays that `use_shell()` never reads. They are
+maintenance hazards — edits to the display sections in `reportingEvent` must
+be reflected manually in the top-level arrays or they silently diverge.
+
+### 1.4 Other known issues
+
+Several shells (T-AE-01, T-DS-01, T-LB-01) have `groupId: null` in analysis
+`orderedGroupings` — a silent execution bug where analyses carry a grouping
+reference but no group identity and are never arm-filtered.
+
+CDISC Pilot data examination reveals:
+- 3 treatment arms, not 2 (`Placebo`, `Xanomeline Low Dose`, `Xanomeline High Dose`)
+- `RACE` values are uppercase (`WHITE`, `BLACK OR AFRICAN AMERICAN`) — templates
+  have mixed case
+- `AMERICAN INDIAN OR ALASKA NATIVE` is present in the data but absent from
+  the template
+
+---
+
+## 2. The Three-Mode Model
+
+All grouping, section, and filter dimensions in any shell fall into exactly
+**three modes**:
+
+| Mode | Definition | Examples | Who supplies the value |
+|------|-----------|----------|------------------------|
+| **1 — Fixed** | Value standardised by CDISC / ADaM convention. Known at template design time. | `SAFFL == "Y"`, `SEX == "M"/"F"`, `TRTEMFL == "Y"` | Template JSON (hardcoded — correct) |
+| **2 — Pre-specified** | Study-specific but known before data arrives — defined in protocol or SAP. | `TRT01A` levels, `AGEGR1` levels, `AEREL` coding, dose groups | User supplies via `hydrate()` |
+| **3 — Data-driven** | Only knowable once data exists. | `RACE` levels, `AEBODSYS`/`AEDECOD`, `ETHNIC`, `PARAMCD` | Derived from data inside `hydrate()` |
+
+---
+
+## 3. Design Principles
+
+1. **Templates are structural specifications, not execution scripts.**
+   They declare shape and statistics but contain no study-specific values.
+
+2. **Mode is declared in the template, not discovered at runtime.**
+   The JSON marks each dimension with its mode. `hydrate()` reads it and acts
+   accordingly.
+
+3. **`hydrate()` is the single point of study-specific wiring.**
+   After `hydrate()` runs the shell is fully specified: every group has a
+   condition, every section a label, every display text is set. `run()` sees
+   no difference between pre-specified and data-driven shells.
+
+4. **`dataDriven: true` maps cleanly onto Mode 3.**
+   The ARS spec flag is semantically correct. Mode 2 groupings use
+   `dataDriven: false` with placeholder groups (no condition values).
+
+5. **`run()` remains simple.**
+   Data-driven resolution happens inside `hydrate()`, not `run()`. `run()` is
+   stateless with respect to data it has not yet seen.
+
+6. **Backwards compatibility.**
+   Mode 1 templates work without any `hydrate()` call. Existing `hydrate()`
+   calls without new arguments continue to work unchanged.
+
+7. **Display metadata is study-time, not template-time.**
+   Templates carry placeholder text. `hydrate()` replaces it. Template authors
+   do not manage study-specific titles.
+
+8. **Inline display sections only (Option A confirmed).**
+   Only inline `ars_display_sub_section` objects are rebuilt by
+   `._hydrate_outputs()`. Global `sub_section_id` references are passed
+   through unchanged and deferred to a future release.
+
+---
+
+## 4. Proposed `hydrate()` Interface
+
+```r
+hydrate(
+  shell,
+
+  # Existing — variable name remapping and label cosmetics (unchanged)
+  variable_map = c(TRT01A = "TRTP"),
+  label_map    = c("Treatment A (N=xx)" = "Placebo (N=xx)"),
+
+  # New — Mode 2: pre-specified group values (treatment arms, dose levels)
+  group_map = list(
+    GRP_TRT = list(
+      list(id = "GRP_TRT_A", value = "Placebo",              order = 1L),
+      list(id = "GRP_TRT_B", value = "Xanomeline Low Dose",  order = 2L),
+      list(id = "GRP_TRT_C", value = "Xanomeline High Dose", order = 3L)
+    )
+  ),
+
+  # New — Mode 2: override specific condition values inside named data subsets
+  subset_map = list(
+    DS_TEAE_REL = list(variable = "AEREL",   comparator = "IN",
+                       value    = c("YES")),
+    DS_TEAE_GR3 = list(variable = "AETOXGR", comparator = "GE",
+                       value    = c("2"))
+  ),
+
+  # New — Mode 2/3: pre-specified section values (lab params, etc.)
+  # Phase B only — not implemented in Phase A
+  section_map = list(
+    PARAMCD = list(
+      list(value = "HGB", label = "Haemoglobin (g/dL)"),
+      list(value = "ALT", label = "Alanine Aminotransferase (U/L)")
+    )
+  ),
+
+  # New — Mode 3: data supplied; distinct values derived automatically
+  adam = list(ADSL = adsl, ADAE = adae),
+
+  # New — Display metadata: titles, footnotes, abbreviations
+  metadata = list(
+    title        = c(
+      "Table 14.1.1 Summary of Demographic Characteristics",
+      "Safety Population"
+    ),
+    footnote     = c(
+      "Age and weight are summarised as mean (SD), median, and range.",
+      "Abbreviations: n = number of subjects; SD = Standard Deviation."
+    ),
+    footnote_append = FALSE,   # FALSE = replace template footnotes (default)
+                               # TRUE  = append after existing footnotes
+    abbreviation = c(
+      "n = number of subjects",
+      "SD = Standard Deviation"
+    ),
+    output_name   = "Table 14.1.1",  # ars_output@name
+    display_title = "Table 14.1.1"   # ars_output_display@display_title
+  ),
+
+  quiet = FALSE
+)
+```
+
+**Rules:**
+- `group_map` → Mode 2 for the named grouping factors
+- `subset_map` → Mode 2 value override for named data subsets; only the listed
+  variable's `comparator` and `value` are replaced; all other sub-clauses and
+  the subset ID are unchanged
+- `adam` → Mode 3 for any grouping factor with `dataDriven: true`; `hydrate()`
+  queries `distinct()` values internally
+- `metadata` → rebuilds the outputs subtree with the supplied display text;
+  NULL (default) passes the subtree through unchanged
+- `section_map` → Phase B only; accepted in Phase A but no-op with a message
+- A single call can mix modes freely
+- If a Mode 3 grouping exists in the template but neither `adam` nor
+  `section_map` is supplied, `hydrate()` errors with a clear message
+- Unused keys in any map emit a warning after that phase completes
+
+---
+
+## 5. Template JSON Changes
+
+### 5.1 Mode 2 groupings — strip condition values, keep structure
+
+```json
+// Before
+{
+  "id": "GRP_TRT_A", "label": "Treatment A (N=xx)", "order": 1,
+  "condition": { "variable": "TRT01A", "comparator": "EQ", "value": ["Treatment A"] }
+}
+
+// After
+{ "id": "GRP_TRT_A", "label": "Treatment A (N=xx)", "order": 1 }
+```
+
+The Total group (`GRP_TRT_TOT`) has no condition today; add `"isTotal": true`
+to mark it explicitly (see §6).
+
+### 5.2 Mode 3 groupings — `dataDriven: true`, no groups list
+
+```json
+{
+  "id": "GRP_RACE",
+  "name": "Race Group",
+  "dataDriven": true,
+  "groupingVariable": "RACE"
+}
+```
+
+`hydrate()` reads `distinct(adam$ADSL, RACE)` and builds the groups list.
+
+### 5.3 Fix `groupId: null` analyses
+
+T-AE-01, T-DS-01, T-LB-01: infer `groupId` from the analysis ID suffix:
+- `_TRT_A` → `GRP_TRT_A`
+- `_TRT_B` → `GRP_TRT_B`
+- `_TOT` → `GRP_TRT_TOT`
+
+### 5.4 Remove top-level decorative arrays
+
+The top-level `"titles"`, `"footnotes"`, and `"abbreviations"` arrays are
+never read by `use_shell()`. Remove them from all 6 templates. The canonical
+source of display text is `reportingEvent.outputs`.
+
+### 5.5 Staging note
+
+All template changes (§5.1–5.4) are implemented in a **dedicated feature
+branch**. They must not be merged to main until Phase C is ready or the README
+examples are simultaneously updated to pass `group_map` with the synthetic
+test-data arm values.
+
+---
+
+## 6. `arscore` Changes — `is_total` on `ars_group`
+
+```r
+is_total = new_property(class_logical, default = FALSE)
+```
+
+Serialised as `"isTotal"` in JSON. Default `FALSE`; existing objects
+unaffected.
+
+**Purpose:** Allows `arsresult::run()` to distinguish "Total = conditionless
+by design" (`is_total = TRUE`) from "arm group missing condition because
+`hydrate()` was not called" (`is_total = FALSE`, no condition).
+
+---
+
+## 7. `hydrate()` Internal Logic
+
+Execution is a linear six-phase pipeline. Phases execute sequentially in the
+order below; each phase receives the reporting event (or shell) rebuilt by the
+previous phase.
+
+### Phase 1 — Variable and label substitution (existing, unchanged)
+
+Walks the reporting event tree substituting variable names and label strings.
+Skips entirely if both maps are NULL.
+
+### Phase 2 — Group expansion (`group_map`, Mode 2)
+
+For each grouping factor ID in `group_map`:
+1. Look up the `ars_grouping_factor` in the reporting event.
+2. For each entry in the user list:
+   - **Update** existing group: inject condition value (`EQ` for scalar,
+     `IN` for vector), update order.
+   - **Create** new group: build `ars_group` with condition derived from the
+     grouping factor's `groupingVariable`.
+3. **Remove** template groups absent from `group_map` (Total is never removed).
+4. Rebuild `ars_grouping_factor` with the resolved group list.
+5. Clone/drop `ars_analysis` objects: find analyses referencing this grouping
+   factor, group by base ID (strip arm suffix), clone for new arms, drop for
+   removed arms.
+6. Rebuild `colHeaders` and `ShellCell` col_labels to match.
+
+**ID conventions:**
+- New group ID: user-supplied `id` field (explicit, never derived)
+- New analysis ID: `<baseId>_<last segment of group id>` (e.g. `AN_AGE_C`)
+- Total group is always preserved; cannot be removed via `group_map`
+
+### Phase 3 — Data-driven group resolution (`adam`, Mode 3)
+
+For each `ars_grouping_factor` with `dataDriven: true`:
+1. Identify source dataset from `groupingDataset` (or infer from analyses
+   referencing this grouping factor).
+2. Query `distinct(adam[[dataset]], groupingVariable)`.
+3. For each distinct value, build `ars_group` with:
+   - `id`: sanitised from value (e.g. `GRP_RACE_WHITE`)
+   - `label`: raw value; user can override via `label_map`
+   - `order`: frequency-descending; alphabetical as tie-break
+   - `condition`: `variable EQ value`
+   - `is_total`: FALSE
+4. Set `dataDriven: false` on the rebuilt grouping factor — the shell is now
+   fully specified.
+5. Clone analyses and ShellCells as per Phase 2.
+
+### Phase 4 — Data-subset value override (`subset_map`, Mode 2)
+
+For each data subset ID in `subset_map`:
+1. Look up the `ars_data_subset` in the reporting event by ID.
+2. Recursively walk its `condition` / `compound_expression` tree to find the
+   sub-clause whose `variable` matches the entry's `variable` field.
+   Traversal is **fully recursive** — nested compound expressions are walked
+   to any depth.
+3. Replace `comparator` and `value` on that sub-clause only. All sibling
+   sub-clauses (e.g. the `TRTEMFL == "Y"` anchor) are preserved unchanged.
+4. Rebuild the data subset bottom-up into a new `ars_data_subset`.
+5. Named subset not found in reporting event → **warning** (not error).
+6. Named `variable` not found in the subset's condition tree → **error** with
+   the subset ID and variable name in the message.
+
+**Example:**
+
+```
+Template: DS_TEAE_REL → AND(TRTEMFL EQ ["Y"], AEREL IN ["PROBABLE","POSSIBLE","RELATED"])
+
+subset_map = list(DS_TEAE_REL = list(variable = "AEREL", comparator = "IN", value = "YES"))
+
+Result:   DS_TEAE_REL → AND(TRTEMFL EQ ["Y"], AEREL IN ["YES"])
+```
+
+### Phase 5 — Display metadata (`metadata`, outputs subtree)
+
+If `metadata` is NULL, skip entirely — outputs subtree is passed through
+unchanged with zero performance cost.
+
+Otherwise delegate to `._hydrate_outputs()` (see §8).
+
+### Phase 6 — Section expansion (`section_map` / `adam`, Modes 2+3)
+
+**Phase B only.** In Phase A, if `section_map` is supplied, emit an
+informational message (`"section_map is reserved for Phase B"`) and continue.
+Sections are passed through unchanged.
+
+### Reporting
+
+After all phases, `hydrate()` emits a structured `cli` summary:
+- Groups resolved per grouping factor (mode and count)
+- Data subsets overridden
+- Display sections updated (title / footnote / abbreviation)
+- Unused keys in `variable_map`, `label_map`, `subset_map` → **warning**
+- Mode 3 groupings and their data-derived value counts → informational
+
+---
+
+## 8. `._hydrate_outputs()` — Bottom-up Immutable Rebuild
+
+Extracted into a dedicated **`hydrate_helpers.R`** file in `arsshells/R/`,
+following the same bottom-up immutable rebuild pattern as the rest of
+`hydrate()`.
+
+### Call chain (leaf → root)
+
+```
+Level 7 (leaf)
+._hydrate_display_sub_section(x, new_text)
+  → new_ars_display_sub_section(id = x@id, text = new_text)
+
+Level 6
+._hydrate_ordered_sub_section(x, new_text)
+  → If x@sub_section_id is set (global reference): return x unchanged.
+  → Otherwise:
+    new_ars_ordered_display_sub_section(
+      order       = x@order,
+      sub_section = ._hydrate_display_sub_section(x@sub_section, new_text)
+    )
+
+Level 5
+._hydrate_display_section(x, metadata)
+  → If x@section_type not in {Title, Footnote, Abbreviation} or
+     the corresponding metadata field is NULL: return x unchanged.
+  → Determine new_texts and append flag from metadata.
+  → Replace mode: build new ordered_sub_sections from new_texts,
+    with order = seq_along(new_texts) and generated IDs
+    paste0(x@section_type, "_", seq_along(new_texts)).
+  → Append mode (footnote only): keep existing ordered_sub_sections,
+    append new ones with order continuing from max(existing order) + 1.
+  → new_ars_display_section(
+      section_type         = x@section_type,
+      ordered_sub_sections = rebuilt_sub_sections
+    )
+
+Level 4
+._hydrate_output_display(x, metadata)
+  → new_ars_output_display(
+      id             = x@id,
+      name           = x@name,
+      description    = x@description,
+      label          = x@label,
+      version        = x@version,
+      display_title  = metadata$display_title %||% x@display_title,
+      display_sections = lapply(x@display_sections,
+                           \(s) ._hydrate_display_section(s, metadata))
+    )
+
+Level 3
+._hydrate_ordered_display(x, metadata)
+  → new_ars_ordered_display(
+      order   = x@order,
+      display = ._hydrate_output_display(x@display, metadata)
+    )
+
+Level 2
+._hydrate_output(x, metadata)
+  → new_ars_output(
+      id       = x@id,
+      name     = metadata$output_name %||% x@name,
+      # all remaining properties (file_specifications, category_ids,
+      # document_refs, programming_code) passed through unchanged
+      displays = lapply(x@displays,
+                   \(d) ._hydrate_ordered_display(d, metadata))
+    )
+
+Level 1 (entry point)
+._hydrate_outputs(outputs, metadata)
+  → lapply(outputs, \(o) ._hydrate_output(o, metadata))
+```
+
+### Metadata field → display section mapping
+
+| `metadata` field | Target | Behaviour |
+|---|---|---|
+| `title` | `section_type = "Title"` | Replace (always) |
+| `footnote` | `section_type = "Footnote"` | Replace or append per `footnote_append` |
+| `abbreviation` | `section_type = "Abbreviation"` | Replace (always) |
+| `output_name` | `ars_output@name` | Direct property override |
+| `display_title` | `ars_output_display@display_title` | Direct property override |
+
+**Multi-output shells:** `metadata` is applied to all outputs uniformly.
+Targeting a specific output by ID is deferred (see §16).
+
+---
+
+## 9. `arsresult` — Bug Fixes and Safety ✅ ALL COMPLETE
+
+### 9.1 Unhydrated arm group warning ✅
+
+In `.resolve_grouping_filter()`: if a group has no condition and `is_total`
+is not `TRUE`, `run()` emits a `cli::cli_warn()` naming the analysis and
+group, indicating `hydrate()` was likely not called. Total groups
+(`is_total = TRUE`) pass through silently as intended. Uses `tryCatch` on
+`grp_obj@is_total` for backwards compatibility with older `ars_group` objects.
+
+### 9.2 Denominator `tryCatch` silent fallback ✅ (was CRITICAL)
+
+**Was:** `tryCatch` swallowed filter errors and fell back to unfiltered ADSL.
+
+**Fix applied:** All three denominator `tryCatch` blocks (analysis-set filter
+on ADSL, grouping condition filter on ADSL, grouping compound expression
+filter on ADSL) now emit `cli::cli_warn()` with the analysis ID, error
+message, and a note that the denominator may be incorrect. The fallback to
+unfiltered data is preserved (to avoid blocking the entire pipeline on one
+analysis), but the issue is now visible.
+
+### 9.3 Silent filter failure in denominator ✅ (was CRITICAL)
+
+Same fix as §9.2 — all three `tryCatch` blocks now warn.
+
+### 9.4 `.make_c()` single-value `IN` bug ✅ (was HIGH)
+
+```r
+# Before — returned bare scalar; x %in% value works by accident
+if (length(vals) == 1L) return(vals[[1L]])
+
+# After — always wraps in c(); semantically correct
+rlang::call2("c", !!!vals)
+```
+
+Single-value IN now transpiles to `SEX %in% c("M")` instead of `SEX %in% "M"`.
+Existing test updated to expect the new form. Two new tests verify single-value
+IN and NOTIN filter correctly at the data level.
+
+### 9.5 Unnamed method return values silently dropped ✅ (was MEDIUM)
+
+In `run()`, after calling the method function, the return value is now
+validated. If `length(vals) > 0` and `names(vals)` is `NULL`, a
+`cli::cli_warn()` is emitted naming the method, operation, and analysis.
+The unnamed return is discarded (`next`) and the operation gets `NA`.
+Previously the `for (nm in names(vals))` loop was silently a no-op.
+
+---
+
+## 10. `arsshells` — Validation Gaps
+
+### 10.1 `validate_shell()` incomplete reference chain
+
+Currently checks `ShellCell@analysis_id` and `@operation_id` only. Missing:
+- `analysis@analysis_set_id` → exists in `@analysis_sets`
+- `analysis@data_subset_id` → exists in `@data_subsets`
+- `analysis@ordered_groupings[*]@grouping_id` → exists in `@analysis_groupings`
+- `analysis@ordered_groupings[*]@group_id` → exists in grouping's `@groups`
+
+**Fix:** Call `arscore::validate_reporting_event()` from within
+`validate_shell()`, or implement the four checks directly.
+
+### 10.2 Crash on empty `@analyses`
+
+`vapply(re@analyses, ...)` crashes if `@analyses` is empty.
+
+**Fix:** Guard with `if (length(re@analyses) == 0L)` before index building.
+
+### 10.3 `use_shell()` case-sensitive ID matching
+
+`use_shell("t-dm-01")` fails to find `T-DM-01.json`.
+
+**Fix:** Normalise the input ID (trim, uppercase) before file matching.
+
+### 10.4 Unused map keys not reported
+
+`hydrate()` gives no feedback when a `variable_map`, `label_map`, or
+`subset_map` key matches nothing. Typos silently do nothing.
+
+**Fix:** After each phase, compare used keys against the supplied map and warn
+for any keys that matched nothing.
+
+---
+
+## 11. Implementation Order
+
+### Phase A — Group expansion, display metadata, bug fixes
+
+Implemented across packages in dependency order. The template changes (Step A2)
+are staged on a feature branch (see §5.5).
+
+```
+Step A1:  arscore    — add is_total to ars_group; JSON serialisation round-trip  ✅ DONE
+Step A2:  arsshells  — update 6 JSON templates:                                 ✅ DONE (merged to main)
+                        strip arm condition values; add isTotal to Total groups;
+                        fix groupId: null; mark dataDriven groupings;
+                        remove top-level decorative arrays
+Step A3:  arsshells  — implement Phase 2: group_map (Mode 2) in hydrate()       ✅ DONE
+Step A4:  arsshells  — implement Phase 3: adam Mode 3 group resolution          ✅ DONE
+Step A5:  arsshells  — implement Phase 4: subset_map in hydrate()               ✅ DONE
+Step A6:  arsshells  — implement Phase 5: metadata + hydrate_helpers.R          ✅ DONE
+Step A7:  arsshells  — unused map key warnings; validate_shell() gaps (§10);    ✅ DONE (unused key warnings done;
+                        use_shell() case normalisation                                   validate_shell() and case
+                                                                                         normalisation need verification)
+Step A8:  arsresult  — fix denominator tryCatch (§9.2/9.3)                      ✅ DONE (warns, no silent fallback)
+Step A9:  arsresult  — fix .make_c() single-value IN (§9.4)                     ✅ DONE (always c())
+Step A10: arsresult  — unhydrated arm group warning (§9.1)                      ✅ DONE (checks is_total)
+Step A11: arsresult  — unnamed method return warning (§9.5)                     ✅ DONE (warns + discards)
+Step A12: All        — tests and docs for Phase A                               ✅ DONE
+                        Templates merged to main. All ars tests pass
+                        (0 fail, 0 warn, 54 pass).
+```
+
+### Phase B — Section (row) expansion
+
+```
+Step B1: arsshells  — add template_key to ShellSection class
+Step B2: arsshells  — refactor T-LB-01/02 JSONs to prototype sections
+Step B3: arsshells  — refactor T-AE-02 JSON to prototype SOC section
+Step B4: arsshells  — refactor T-DM-01 Race section to template section
+Step B5: arsshells  — implement Phase 6: section_map (Mode 2) in hydrate()
+Step B6: arsshells  — implement Mode 3 section resolution (adam arg)
+Step B7: All        — tests and docs for Phase B
+```
+
+### Phase C — Bundled example data and complete README
+**Prerequisite: Phase A template branch must be merged.**
+
+```
+Step C1: ars  — add CDISCPILOT01 datasets as bundled package data
+Step C2: ars  — document datasets with roxygen2
+Step C3: ars  — update README with complete, runnable examples
+Step C4: ars  — add DESCRIPTION Suggests entry for data sourcing
+Step C5: ars  — getting-started vignette
+```
+
+---
+
+## 12. File Change Inventory
+
+### Phase A
+
+| Package | File | Change |
+|---------|------|--------|
+| arscore | `R/ars_group.R` | Add `is_total` property (default `FALSE`) |
+| arscore | `R/ars_json.R` | Serialise/deserialise `isTotal` ↔ `is_total` |
+| arscore | `tests/testthat/test-ars_group.R` | Construct, serialise, round-trip with `is_total` |
+| arsshells | `inst/templates/tables/T-DM-01.json` | Strip arm conditions; add `isTotal`; RACE → `dataDriven: true`; remove top-level arrays *(feature branch)* |
+| arsshells | `inst/templates/tables/T-AE-01.json` | Strip arm conditions; add `isTotal`; fix null groupIds; remove top-level arrays *(feature branch)* |
+| arsshells | `inst/templates/tables/T-AE-02.json` | Strip arm conditions; add `isTotal`; remove top-level arrays *(feature branch)* |
+| arsshells | `inst/templates/tables/T-DS-01.json` | Strip arm conditions; add `isTotal`; fix null groupIds; remove top-level arrays *(feature branch)* |
+| arsshells | `inst/templates/tables/T-LB-01.json` | Strip arm conditions; add `isTotal`; fix null groupIds; remove top-level arrays *(feature branch)* |
+| arsshells | `inst/templates/tables/T-LB-02.json` | Strip arm conditions; add `isTotal`; remove top-level arrays *(feature branch)* |
+| arsshells | `R/hydrate.R` | Add `group_map`, `subset_map`, `adam`, `metadata` args; Phases 2–5 logic; Phase 6 placeholder; unused key warnings |
+| arsshells | `R/hydrate_helpers.R` | **NEW** — `._hydrate_outputs()` and all sub-functions (Levels 1–7) |
+| arsshells | `R/validate_shell.R` | Full reference chain; empty-analyses guard; `use_shell()` ID normalisation |
+| arsshells | `tests/testthat/test-hydrate.R` | Group, subset_map, metadata, Mode 3, mixed-mode tests (see §13) |
+| arsresult | `R/run.R` | ✅ Denominator `tryCatch` warns (3 blocks); unhydrated arm warning in `.resolve_grouping_filter()`; unnamed method return validation + discard |
+| arsresult | `R/transpile.R` | ✅ `.make_c()` always wraps in `c()` |
+| arsresult | `tests/testthat/test-run.R` | ✅ +7 tests: denom resilience, sub_clause_id error, A10 warn/no-warn, A11 unnamed return; GRP_TOT fixture updated to `is_total = TRUE` |
+| arsresult | `tests/testthat/test-transpile.R` | ✅ Updated single-value IN expectation; +2 tests: single-value IN/NOTIN data-level filtering |
+| ars | `tests/testthat/test-integration-T-AE-02.R` | ✅ All `run()` calls now hydrate with `group_map` first; `ars_pipeline()` test suppresses A10 warnings |
+| ars | `tests/testthat/test-pipe.R` | ✅ Rewritten: replaced fragile `local_mocked_bindings` with real minimal-data tests for ArsResult, render() unpacking, and full pipe |
+| ars | `README.md` | Update workflow example (coordinate with template branch merge) |
+
+### Phase B
+
+| Package | File | Change |
+|---------|------|--------|
+| arsshells | `R/shell_classes.R` | Add `template_key` to `ShellSection` |
+| arsshells | `inst/templates/tables/T-LB-01.json` | Refactor to 2 prototype sections + prototype analyses |
+| arsshells | `inst/templates/tables/T-LB-02.json` | Refactor to 3 prototype sections |
+| arsshells | `inst/templates/tables/T-AE-02.json` | Refactor to 1 prototype SOC section |
+| arsshells | `inst/templates/tables/T-DM-01.json` | Race section → template section |
+| arsshells | `R/hydrate.R` | Implement Phase 6: section_map and Mode 3 section expansion |
+| arsshells | `R/hydrate_helpers.R` | Section expansion helpers |
+| arsshells | `R/validate_shell.R` | Validate template section prototype structure |
+| arsshells | `tests/testthat/test-hydrate.R` | Section expansion tests |
+| ars | `README.md` | Update with `section_map` examples |
+
+### Phase C
+
+| Package | File | Change |
+|---------|------|--------|
+| ars | `data-raw/cdiscpilot01.R` | Provenance and preparation script |
+| ars | `data/adsl.rda` | Bundled ADSL (254 × 48, CDISCPILOT01) |
+| ars | `data/adae.rda` | Bundled ADAE (1,191 × 55, CDISCPILOT01) |
+| ars | `data/adlb.rda` | Bundled ADLB (curated subset) |
+| ars | `R/data.R` | Roxygen2 documentation for all three datasets |
+| ars | `DESCRIPTION` | `LazyData: true`; data source and licence note |
+| ars | `README.md` | Full rewrite of Quick Start using bundled data |
+| ars | `vignettes/getting-started.Rmd` | End-to-end pipeline walkthrough |
+
+---
+
+## 13. Test Coverage Plan
+
+### arscore (Phase A)
+- `ars_group(is_total = TRUE)` constructs and prints correctly
+- `is_total` serialises to `"isTotal": true` in JSON
+- JSON round-trip preserves `is_total` for both `TRUE` and `FALSE`
+- Default `FALSE` — existing objects unaffected
+
+### arsshells — hydrate() group tests (Phase A)
+1. **Mode 2, 2-arm** — condition values injected; Total group unchanged
+2. **Mode 2, reorder** — `order` field controls col_header sequence
+3. **Mode 2, 3-arm** — new arm cloned; analyses created; IDs deterministic
+4. **Mode 2, drop arm** — arm B removed cleanly from analyses and cells
+5. **Mode 3, from data** — distinct values derived; groups built; `dataDriven`
+   reset to `FALSE` after hydration
+6. **Mixed mode** — `group_map` for TRT, `adam` for RACE, in same call
+7. **Unused keys warned** — `variable_map` key that matches nothing → warning
+8. **Mode 2 without group_map** — Mode 2 grouping present but no `group_map`
+   supplied → error with clear message at `hydrate()` time
+9. **Invalid inputs** — unknown grouping ID, missing `value` field → errors
+
+### arsshells — hydrate() subset_map tests (Phase A)
+1. **Simple override** — single condition value replaced; subset ID unchanged
+2. **Compound override** — target sub-clause replaced; sibling clauses untouched
+3. **Nested compound** — target variable in nested compound; recursive traversal
+   finds and replaces it
+4. **Unused subset ID** — key not in template → warning (not error)
+5. **Missing variable** — variable not found in named subset → error with
+   subset ID and variable name
+6. **Multi-override** — two entries in `subset_map`; both applied independently
+
+### arsshells — hydrate() metadata tests (Phase A)
+1. **Title replace** — new title lines replace template; sub-section count matches
+2. **Footnote replace** — new footnotes replace template footnotes
+3. **Footnote append** — `footnote_append = TRUE` keeps existing, appends new
+4. **Abbreviation replace** — abbreviation list replaced
+5. **output_name** — `ars_output@name` updated
+6. **display_title** — `ars_output_display@display_title` updated
+7. **Partial metadata** — only `title` supplied; footnote and abbreviation
+   sections passed through unchanged
+8. **NULL metadata** — outputs subtree identical to original (no rebuild)
+9. **Global sub_section_id** — inline sub-sections rebuilt; global
+   `sub_section_id` references passed through unchanged
+
+### arsshells — hydrate() section tests (Phase B)
+1. **Mode 2, flat** — `section_map` expands T-LB-01 prototype to N sections
+2. **Mode 3, flat** — `adam`-derived PARAMCD levels expand T-LB-01
+3. **Mode 2, hierarchy** — SOC/PT nested structure in T-AE-02
+4. **Fixed + template mix** — Age/Sex fixed; Race expands in T-DM-01
+5. **Order control** — `order` field respected
+
+### arsresult (Phase A) ✅ ALL TESTS WRITTEN AND PASSING
+- ✅ Unhydrated non-Total conditionless group fires warning at `run()` time
+- ✅ Conditionless Total (`is_total = TRUE`) does not fire warning
+- ✅ Denominator resilience when ADSL lacks grouping variable (completes, no crash)
+- ✅ Hard error surfaced for unresolvable `sub_clause_id` (not swallowed)
+- ✅ Single-value `IN` condition transpiles to `c(value)` and filters correctly
+- ✅ Single-value `NOTIN` condition filters correctly at data level
+- ✅ Unnamed method return value triggers warning; result is NA (not silently dropped)
+- ✅ Existing Total group fixture updated to use `is_total = TRUE`
+
+### Verification — manual (Phase A)
+- Audit snapshot test changes from JSON template updates. Changes are expected
+  but must be reviewed to confirm structural integrity is preserved (no
+  analyses dropped, no ID changes outside the arm condition removals).
+
+### ars — Phase C acceptance criterion
+
+```r
+library(ars)
+
+use_shell("T-DM-01") |>
+  hydrate(
+    group_map = list(
+      GRP_TRT = list(
+        list(id = "GRP_TRT_A", value = "Placebo",              order = 1L),
+        list(id = "GRP_TRT_B", value = "Xanomeline Low Dose",  order = 2L),
+        list(id = "GRP_TRT_C", value = "Xanomeline High Dose", order = 3L)
+      )
+    ),
+    adam = list(ADSL = adsl),
+    metadata = list(
+      title    = c("Table 14.1.1 Summary of Demographic Characteristics",
+                   "Safety Population"),
+      footnote = c("Age and weight are summarised as mean (SD), median, and range.")
+    )
+  ) |>
+  run(adam = list(ADSL = adsl)) |>
+  render(backend = "tfrmt")
+```
+
+Must run without error or warning, producing a rendered gt table with three
+arm columns (Placebo, Xanomeline Low Dose, Xanomeline High Dose), data-derived
+RACE rows, and the custom title.
+
+---
+
+## 14. Backwards Compatibility
+
+- `hydrate()` without new args → unchanged (Mode 1 shells unaffected)
+- `is_total` defaults to `FALSE` → all existing `ars_group` objects unaffected
+- `metadata = NULL` (default) → outputs subtree passed through; no rebuild
+- `subset_map = NULL` (default) → data subsets passed through unchanged
+- Template JSON changes are staged on a feature branch; main branch behaviour
+  is unchanged until the branch is merged alongside updated README examples
+- Removing top-level decorative arrays is non-breaking (`use_shell()` already
+  ignores them)
+- Phase B JSON refactors will invalidate snapshot tests — expected and
+  intentional; all snapshot changes must be manually audited
+
+---
+
+## 15. Resolved Design Decisions
+
+| Question | Decision |
+|---|---|
+| Display metadata option | **Option A confirmed** — inline `ars_display_sub_section` objects only; global `sub_section_id` references deferred |
+| Total group in `group_map` | Always auto-preserved; cannot be removed via `group_map` |
+| Multi-value arm conditions | `value = c("Dose A", "Dose B")` → `IN` comparator; supported in both `group_map` and `subset_map` |
+| Mode 3 group ordering | Frequency-descending by default; alphabetical as tie-break; `order` override per item in `section_map` (Phase B) |
+| `dataDriven` reset after hydration | Reset to `FALSE` — the hydrated shell must be a fully-specified, self-contained ARS object |
+| `subset_map` traversal depth | **Fully recursive** — walks compound expressions to any depth; avoids a future breaking change |
+| Decorative JSON arrays | Removed from all 6 templates in Step A2 |
+| `hydrate_helpers.R` | `._hydrate_outputs()` and all Level 1–7 sub-functions extracted to a separate file for maintainability |
+| Template staging | Feature branch; merged only when Phase C data or updated README examples are ready simultaneously |
+
+---
+
+## 16. Known Flaws Deferred (Not In Scope)
+
+| Flaw | Package | Severity | Notes |
+|------|---------|----------|-------|
+| `OP_MEAN_SD` returns mean only, not composite string | arsresult stdlib | Medium | Downstream formatter compensates; separate PR |
+| Case-sensitive method registry keys | arsresult | Low | Add normalisation helper separately |
+| Compound expression empty sub-clause returns `TRUE` silently | arsresult | Low | Add explicit error in future |
+| `sub_clause_id` resolution not implemented | arsresult | Medium | Rare use case; documented limitation |
+| Duplicate IDs in reporting event silently overwrite | arscore | Low | Add dedup check in `validate_reporting_event()` |
+| Numeric coercion in `.extract_values()` hides type errors | arsresult | Medium | Add `suppressWarnings = FALSE` mode |
+| `metadata` targets all outputs in multi-output shells | arsshells | Low | Future: allow targeting by output ID |
+| Section auto-ordering by frequency (Mode 3) | arsshells | Low | Alphabetical default for Phase B; frequency opt-in later |
+| CDISCPILOT01 ADLB scope | ars | Low | Curated subset (HGB, ALT, CREAT minimum); full ADLB deferred |
+
+---
+
+## 17. Open Questions
+
+1. **CDISCPILOT01 licence:** The data is publicly available under the CDISC
+   licence for non-commercial use and is used by `admiral`, `tfrmt`, and
+   `pharmaverseadam`. The `data-raw/cdiscpilot01.R` script will document
+   provenance. **Confirm this is acceptable before Phase C begins.**
+
+---
+
+## 18. Summary
+
+### Three-mode, three-dimensional configurability model
+
+**The three modes**
+
+| Mode | Template marker | User action |
+|------|----------------|-------------|
+| Fixed | `dataDriven: false` + full condition | None |
+| Pre-specified | `dataDriven: false` + no condition | Supply via `group_map` / `subset_map` / `section_map` / `metadata` |
+| Data-driven | `dataDriven: true` | Supply `adam` data to `hydrate()` |
+
+**The three dimensions**
+
+| Dimension | Mechanism | Controls |
+|-----------|-----------|----------|
+| **Columns** | `group_map` + `adam` | Treatment arms: values, count, order, labels |
+| **Rows/Sections** | `section_map` + `adam` *(Phase B)* | Lab params, SOCs/PTs, demographic levels |
+| **Display metadata** | `metadata` | Titles, footnotes, abbreviations, output name |
+
+**Data-subset value flexibility**
+
+| Mechanism | Controls |
+|-----------|----------|
+| `subset_map` | Override specific condition values inside named data subsets |
+
+### Bug fixes bundled in Phase A ✅ ALL FIXED
+
+| Bug | Severity | Status | Impact |
+|-----|----------|--------|--------|
+| Denominator `tryCatch` silent fallback | CRITICAL | ✅ Fixed (A8) | Now warns with analysis ID and error details |
+| `groupId: null` in 3 shells | HIGH | ✅ Fixed (A2) | Templates updated; null groupIds resolved |
+| `.make_c()` single-value `IN` | HIGH | ✅ Fixed (A9) | Always wraps in `c()` |
+| Unhydrated arm group (no condition, not Total) | HIGH | ✅ Fixed (A10) | Warns at `run()` time |
+| Unnamed method returns silently dropped | MEDIUM | ✅ Fixed (A11) | Warns and discards; result is NA |
+| `validate_shell()` incomplete reference chain | MEDIUM | ⚠️ Needs verification | Part of A7 |
+| Unused `hydrate()` map keys not reported | MEDIUM | ✅ Fixed (A7) | Warns for unused keys |
+| Decorative JSON arrays never read | LOW | ✅ Fixed (A2) | Removed from all 6 templates |
+
+### Separation of concerns after this work
+
+| Layer | Responsibility |
+|-------|---------------|
+| **Templates** | Structural blueprint: shape, statistics, mode markers |
+| **`hydrate()`** | Study-specific wiring: group values, subset overrides, section expansion, display metadata |
+| **`run()`** | Execution against fully-specified shell; no discovery |
+| **`ars::adsl/adae/adlb`** | Reference data for examples, vignettes, and tests |
+
+---
+
+## 19. Backlog (Post Phase A/B/C)
+
+Items carried forward from per-package planning files. Not in scope for the
+current rework but must not be lost. Grouped by package.
+
+### arscore
+
+| Item | Priority | Notes |
+|------|----------|-------|
+| Warn on unreferenced methods and unused groupings | Medium | `validate_reporting_event()` enhancement |
+| Validate `ordered_groupings` reference valid reporting event groupings | Medium | Currently unchecked |
+| Integration test: realistic multi-analysis RE round-trip (build → validate → JSON → reimport → equality) | Medium | End-to-end confidence |
+| Property-based / fuzzing tests for validators | Low | Long-term robustness |
+| Coverage measurement with `covr` | Low | Identify untested paths |
+| `format()` improvements for `ars_method`, `ars_output`, `ars_analysis` | Low | Show operation IDs / display names inline; pattern set by `ars_document_reference` |
+| Package logo | Low | Cosmetic |
+
+### arsshells — template library expansion
+
+**Priority 2 — next batch (6 templates):**
+
+| ID | Name | Dataset |
+|----|------|---------|
+| T-VS-01 | Summary of Vital Signs | ADVS |
+| T-AE-03 | Adverse Events by Severity (CTCAE Grade) | ADAE |
+| T-AE-04 | Adverse Events by Relationship to Study Drug | ADAE |
+| T-AE-05 | Serious Adverse Events | ADAE |
+| T-EF-01 | Primary Efficacy Endpoint Summary | ADEFF |
+| T-EX-01 | Summary of Study Drug Exposure | ADEX |
+
+**Priority 3 — remaining tables, figures, listings (43 templates):**
+
+See `arsshells/REFERENCE.md` for the full 55-shell inventory.
+
+### arsresult
+
+| Item | Priority | Notes |
+|------|----------|-------|
+| Additional stdlib methods: geometric mean, Kaplan–Meier, Cox HR | Medium | Needed for T-EF-04, survival tables |
+| Arrow / DuckDB integration tests | Medium | Backend-agnostic transpiler needs backend tests |
+| `IS_NULL` / `NOT_NULL` comparator support | Low | Rare in CDISC standards; log as known limitation until needed |
+
+### arstlf
+
+| Item | Priority | Notes |
+|------|----------|-------|
+| `gt` backend (direct assembly without tfrmt) | High | Simpler path for sponsors not using tfrmt |
+| `rtables` backend | Medium | Roche framework; common in oncology sponsors |
+| `ggplot2` backend for F-* figure templates | Medium | Required before any figure template can render |
+| RTF / PDF export quality testing | Medium | tfrmt backend produces HTML reliably; RTF/PDF needs audit |
+
+### ars
+
+| Item | Priority | Notes |
+|------|----------|-------|
+| Optional Shiny app (`R/ars_app.R`) | Low | Interactive shell selection, hydration, mock preview |
+| Enable pkgdown GitHub Pages deployment when repos go public | Low | Uncomment deploy step; use org-scoped PAT |
+
+### Cross-cutting
+
+| Item | Priority | Notes |
+|------|----------|-------|
+| `AGENTS.md` / memory files — keep in sync with MASTER_PLAN.md §0 | Ongoing | Run `/memory` update after any §0 change |
+| arscore vignette: "JSON Round-Trip and Validation" | Low | Currently missing; `complete-reporting-event` vignette exists |

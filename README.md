@@ -203,7 +203,7 @@ arsworks/
 ├── renv.lock             ← pinned R package environment
 ├── renv/                 ← renv activation scripts
 ├── arsworks.Rproj        ← RStudio project file
-├── PLAN_DATA_DRIVEN_GROUPS.md
+├── MASTER_PLAN.md
 ├── MAKE_TEST_DATA.md
 └── data_table_examples.R
 ```
