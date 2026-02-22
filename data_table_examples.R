@@ -160,40 +160,59 @@ params <- list(
 )
 
 adlb_rows <- lapply(params, function(p) {
-  # Baseline record (ABLFL = "Y")
+  n <- length(saf_subjects)
+  trt <- adsl$TRT01A[match(saf_subjects, adsl$USUBJID)]
+
+  # Baseline record (ABLFL = "Y", ANL01FL = "Y")
   bl <- data.frame(
     USUBJID  = saf_subjects,
     STUDYID  = "STUDY-001",
-    TRT01A   = adsl$TRT01A[match(saf_subjects, adsl$USUBJID)],
+    TRT01A   = trt,
     PARAMCD  = p$paramcd,
     PARAM    = p$param,
-    AVAL     = round(rnorm(length(saf_subjects), p$bl_mean, p$bl_sd), 2),
+    AVAL     = round(rnorm(n, p$bl_mean, p$bl_sd), 2),
     BASE     = NA_real_,
     CHG      = NA_real_,
     ABLFL    = "Y",
     ANL01FL  = "Y",
+    AVISITN  = 0L,
     SAFFL    = "Y",
     stringsAsFactors = FALSE
   )
   bl$BASE <- bl$AVAL
-  
-  # Post-baseline record (ABLFL != "Y", CHG = AVAL - BASE)
-  pb <- bl
-  pb$AVAL  <- round(bl$AVAL + rnorm(length(saf_subjects), p$chg_mean, p$chg_sd), 2)
-  pb$CHG   <- round(pb$AVAL - bl$BASE, 2)
-  pb$ABLFL <- "N"
-  
-  rbind(bl, pb)
+
+  # Post-baseline visit 1 (ABLFL = "N", ANL01FL = "N" — not the analysis visit)
+  # Represents an intermediate on-treatment measurement; intentionally excluded
+  # from T-LB-01 CHG analyses so that ANL01FL filtering is load-bearing.
+  pb1 <- bl
+  pb1$AVAL    <- round(bl$AVAL + rnorm(n, p$chg_mean * 0.5, p$chg_sd), 2)
+  pb1$CHG     <- round(pb1$AVAL - bl$BASE, 2)
+  pb1$ABLFL   <- "N"
+  pb1$ANL01FL <- "N"   # ← excluded from analysis
+  pb1$AVISITN <- 1L
+
+  # Post-baseline visit 2 (ABLFL = "N", ANL01FL = "Y" — the analysis visit)
+  # This is the record used by T-LB-01 CHG analyses and T-LB-02 shift tables.
+  pb2 <- bl
+  pb2$AVAL    <- round(bl$AVAL + rnorm(n, p$chg_mean, p$chg_sd), 2)
+  pb2$CHG     <- round(pb2$AVAL - bl$BASE, 2)
+  pb2$ABLFL   <- "N"
+  pb2$ANL01FL <- "Y"   # ← included in analysis
+  pb2$AVISITN <- 2L
+
+  rbind(bl, pb1, pb2)
 })
 
 adlb <- do.call(rbind, adlb_rows)
 
 # Add BNRIND (baseline normal range indicator) and WGRNRIND (worst post-BL)
 # Required by T-LB-02. Distribute Low/Normal/High so all cells are non-empty.
+# WGRNRIND is only meaningful on the analysis visit (ANL01FL = "Y") rows.
 nrind_levels <- c("Low", "Normal", "High")
 
-bl_rows <- adlb$ABLFL == "Y"
-pb_rows <- adlb$ABLFL == "N"
+bl_rows  <- adlb$ABLFL    == "Y"
+pb_rows  <- adlb$ABLFL    == "N"                          # all post-baseline
+anl_rows <- adlb$ANL01FL  == "Y" & adlb$ABLFL == "N"     # analysis visit only
 
 # Only HGB, ALT, CREAT are used in T-LB-02 — populate all for completeness
 adlb$BNRIND   <- NA_character_
@@ -204,13 +223,15 @@ adlb$BNRIND[bl_rows] <- rep_len(
   c(rep("Normal", 14L), rep("Low", 3L), rep("High", 3L)),
   sum(bl_rows)
 )
-# Carry baseline BNRIND forward to post-baseline rows
-adlb$BNRIND[pb_rows] <- adlb$BNRIND[bl_rows]
+# Carry baseline BNRIND forward to ALL post-baseline rows (visit 1 and 2)
+# so that T-LB-02 shift logic has BNRIND available on the analysis visit.
+adlb$BNRIND[pb_rows] <- rep_len(adlb$BNRIND[bl_rows], sum(pb_rows))
 
-# Worst post-baseline grade — rotate so all 3 × 3 shift cells are non-empty
-adlb$WGRNRIND[pb_rows] <- rep_len(
+# WGRNRIND only on the analysis visit (ANL01FL = "Y") — rotate so all
+# 3 × 3 shift cells (Low/Normal/High × Low/Normal/High) are non-empty.
+adlb$WGRNRIND[anl_rows] <- rep_len(
   c(rep("Normal", 12L), rep("Low", 4L), rep("High", 4L)),
-  sum(pb_rows)
+  sum(anl_rows)
 )
 
 # ── Verify key cell counts ────────────────────────────────────────────────────
@@ -220,11 +241,28 @@ print(table(adsl$TRT01A, adsl$SAFFL))
 cat("\n=== adae (TRTEMFL = Y, by TRT01A) ===\n")
 print(table(adae$TRT01A[adae$TRTEMFL == "Y"]))
 
+cat("\n=== adlb visit structure (rows per subject per PARAMCD, HGB only) ===\n")
+hgb <- adlb[adlb$PARAMCD == "HGB", ]
+cat("  All visits:            ", nrow(hgb) / length(unique(hgb$USUBJID)),
+    "rows per subject\n")
+cat("  ABLFL=Y (baseline):    ",
+    sum(hgb$ABLFL == "Y") / length(unique(hgb$USUBJID)), "row per subject\n")
+cat("  ABLFL=N, ANL01FL=N:    ",
+    sum(hgb$ABLFL == "N" & hgb$ANL01FL == "N") / length(unique(hgb$USUBJID)),
+    "row per subject (non-analysis visit — excluded from CHG analyses)\n")
+cat("  ABLFL=N, ANL01FL=Y:    ",
+    sum(hgb$ABLFL == "N" & hgb$ANL01FL == "Y") / length(unique(hgb$USUBJID)),
+    "row per subject (analysis visit — included in CHG analyses)\n")
+
 cat("\n=== adlb (baseline, by PARAMCD and TRT01A) ===\n")
 print(table(adlb$PARAMCD[adlb$ABLFL == "Y"], adlb$TRT01A[adlb$ABLFL == "Y"]))
 
-cat("\n=== T-LB-02 shift cells (BNRIND x WGRNRIND, HGB only) ===\n")
-hgb_pb <- adlb[adlb$PARAMCD == "HGB" & adlb$ABLFL == "N", ]
+cat("\n=== adlb (analysis visit ABLFL=N ANL01FL=Y, by PARAMCD and TRT01A) ===\n")
+anl_pb <- adlb[adlb$ABLFL == "N" & adlb$ANL01FL == "Y", ]
+print(table(anl_pb$PARAMCD, anl_pb$TRT01A))
+
+cat("\n=== T-LB-02 shift cells (BNRIND x WGRNRIND, HGB analysis visit only) ===\n")
+hgb_pb <- adlb[adlb$PARAMCD == "HGB" & adlb$ABLFL == "N" & adlb$ANL01FL == "Y", ]
 print(table(hgb_pb$BNRIND, hgb_pb$WGRNRIND))
 
 cat("\nDone. Objects created: adsl, adae, adlb\n")
