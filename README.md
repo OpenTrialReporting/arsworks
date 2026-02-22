@@ -11,6 +11,14 @@ This repository does not contain package source code itself. It holds:
 - An `renv.lock` capturing the full R package environment
 - Design documents and cross-package planning files
 
+**Reproduce the full environment on a new machine:**
+
+```bash
+git clone --recurse-submodules https://github.com/OpenTrialReporting/arsworks.git
+cd arsworks
+Rscript -e "renv::restore()"
+```
+
 ---
 
 ## Package architecture
