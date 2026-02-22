@@ -1,0 +1,15 @@
+[submodule "ars"]
+	path = ars
+	url = https://github.com/OpenTrialReporting/ars.git
+[submodule "arscore"]
+	path = arscore
+	url = https://github.com/OpenTrialReporting/arscore.git
+[submodule "arsshells"]
+	path = arsshells
+	url = https://github.com/OpenTrialReporting/arsshells.git
+[submodule "arsresult"]
+	path = arsresult
+	url = https://github.com/OpenTrialReporting/arsresult.git
+[submodule "arstlf"]
+	path = arstlf
+	url = https://github.com/OpenTrialReporting/arstlf.git
