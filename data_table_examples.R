@@ -206,33 +206,63 @@ adlb_rows <- lapply(params, function(p) {
 adlb <- do.call(rbind, adlb_rows)
 
 # Add BNRIND (baseline normal range indicator) and WGRNRIND (worst post-BL)
-# Required by T-LB-02. Distribute Low/Normal/High so all cells are non-empty.
-# WGRNRIND is only meaningful on the analysis visit (ANL01FL = "Y") rows.
-nrind_levels <- c("Low", "Normal", "High")
+# Required by T-LB-02. Assigned per-arm so Arms A and B have meaningfully
+# different shift distributions. WGRNRIND is only set on the analysis visit
+# (ANL01FL = "Y" AND ABLFL = "N").
+#
+# Arm A: more normal baseline, more improvement (shift toward Normal/Low)
+# Arm B: more abnormal baseline, more worsening (shift toward High)
+# Both arms have all 3×3 shift cells populated to exercise the full table.
 
-bl_rows  <- adlb$ABLFL    == "Y"
-pb_rows  <- adlb$ABLFL    == "N"                          # all post-baseline
-anl_rows <- adlb$ANL01FL  == "Y" & adlb$ABLFL == "N"     # analysis visit only
-
-# Only HGB, ALT, CREAT are used in T-LB-02 — populate all for completeness
 adlb$BNRIND   <- NA_character_
 adlb$WGRNRIND <- NA_character_
 
-# Baseline: rotate Low/Normal/High across subjects (within each parameter)
-adlb$BNRIND[bl_rows] <- rep_len(
-  c(rep("Normal", 14L), rep("Low", 3L), rep("High", 3L)),
-  sum(bl_rows)
-)
-# Carry baseline BNRIND forward to ALL post-baseline rows (visit 1 and 2)
-# so that T-LB-02 shift logic has BNRIND available on the analysis visit.
-adlb$BNRIND[pb_rows] <- rep_len(adlb$BNRIND[bl_rows], sum(pb_rows))
+for (arm in c("Treatment A", "Treatment B")) {
 
-# WGRNRIND only on the analysis visit (ANL01FL = "Y") — rotate so all
-# 3 × 3 shift cells (Low/Normal/High × Low/Normal/High) are non-empty.
-adlb$WGRNRIND[anl_rows] <- rep_len(
-  c(rep("Normal", 12L), rep("Low", 4L), rep("High", 4L)),
-  sum(anl_rows)
-)
+  arm_subj <- adsl$USUBJID[adsl$TRT01A == arm]
+
+  bl_idx  <- which(adlb$ABLFL == "Y"  & adlb$USUBJID %in% arm_subj)
+  pb_idx  <- which(adlb$ABLFL == "N"  & adlb$USUBJID %in% arm_subj)
+  anl_idx <- which(adlb$ABLFL == "N"  & adlb$ANL01FL == "Y" &
+                     adlb$USUBJID %in% arm_subj)
+
+  # Baseline BNRIND: Arm A skews Normal-heavy; Arm B skews High-heavy
+  # (20 subjects × 7 params = 140 baseline rows per arm)
+  if (arm == "Treatment A") {
+    adlb$BNRIND[bl_idx] <- rep_len(
+      c(rep("Normal", 14L), rep("Low", 4L), rep("High", 2L)),
+      length(bl_idx)
+    )
+  } else {
+    adlb$BNRIND[bl_idx] <- rep_len(
+      c(rep("Normal", 10L), rep("Low", 3L), rep("High", 7L)),
+      length(bl_idx)
+    )
+  }
+
+  # Carry BNRIND forward to all post-baseline rows for this arm
+  # Match by USUBJID + PARAMCD so every visit row gets the right value
+  for (i in pb_idx) {
+    bl_match <- which(adlb$ABLFL == "Y" &
+                        adlb$USUBJID  == adlb$USUBJID[i] &
+                        adlb$PARAMCD  == adlb$PARAMCD[i])
+    adlb$BNRIND[i] <- adlb$BNRIND[bl_match]
+  }
+
+  # WGRNRIND on analysis visit only: Arm A skews toward improvement (Normal);
+  # Arm B skews toward worsening (High). All shift cells populated in both arms.
+  if (arm == "Treatment A") {
+    adlb$WGRNRIND[anl_idx] <- rep_len(
+      c(rep("Normal", 14L), rep("Low", 4L), rep("High", 2L)),
+      length(anl_idx)
+    )
+  } else {
+    adlb$WGRNRIND[anl_idx] <- rep_len(
+      c(rep("Normal", 8L), rep("Low", 3L), rep("High", 9L)),
+      length(anl_idx)
+    )
+  }
+}
 
 # ── Verify key cell counts ────────────────────────────────────────────────────
 cat("=== adsl ===\n")
