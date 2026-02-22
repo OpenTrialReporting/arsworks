@@ -163,22 +163,37 @@ use_shell("T-AE-02") |>
 
 ---
 
-## Keeping submodules up to date
+## Keeping submodules in sync
 
-Each package evolves in its own repo. To pull the latest commit from one or
-all submodules into `arsworks`:
+When changes are pushed to an individual package repo, `arsworks` does not
+update automatically — it still points to the old commit. Syncing is a
+deliberate two-step: pull the new commits into the submodule, then record the
+updated pointer in `arsworks`.
 
 ```bash
-# Update a single package
-git submodule update --remote arscore
+cd arsworks
 
-# Update all packages
+# Update one specific package
+git submodule update --remote arsresult
+
+# Or update all packages at once
 git submodule update --remote
 
-# Commit the updated pointers
-git add arscore   # or git add -A
-git commit -m "Bump arscore to latest"
+# Commit the new pointers
+git add arsresult        # or git add -A to catch all updated submodules
+git commit -m "Bump arsresult to latest"
+git push
 ```
+
+To check whether any submodules are ahead of what `arsworks` has pinned:
+
+```bash
+git submodule status
+```
+
+A `+` prefix on a line means that submodule has commits not yet recorded in
+`arsworks`. The deliberate manual bump is intentional — it ensures `arsworks`
+always reflects a set of package versions known to work together.
 
 ---
 
