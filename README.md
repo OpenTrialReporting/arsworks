@@ -41,6 +41,69 @@ together.
 
 ---
 
+## Usage
+
+The examples below use the synthetic ADaM datasets in `data_table_examples.R`
+(60 subjects, 3 arms). Run that script first to create `adsl`, `adae`, and
+`adlb` in your session, then load `ars`.
+
+```r
+source("data_table_examples.R")
+library(ars)
+```
+
+There are two equivalent patterns for generating a table.
+
+**Pattern A — pipe workflow** (recommended when you need the shell object for
+further inspection or custom rendering):
+
+```r
+shell <- use_shell("T-AE-02") |>
+  hydrate(variable_map = c(TRT01A = "TRT01A", SAFFL = "SAFFL",
+                            TRTEMFL = "TRTEMFL",
+                            AEBODSYS = "AEBODSYS", AEDECOD = "AEDECOD"))
+
+ard <- run(shell, adam = list(ADAE = adae, ADSL = adsl))
+render(ard, shell, backend = "tfrmt")
+```
+
+**Pattern B — `ars_pipeline()`** (simpler for scripts):
+
+```r
+ars_pipeline(
+  shell        = "T-AE-02",
+  adam         = list(ADAE = adae, ADSL = adsl),
+  variable_map = c(TRT01A = "TRT01A", SAFFL = "SAFFL",
+                   TRTEMFL = "TRTEMFL",
+                   AEBODSYS = "AEBODSYS", AEDECOD = "AEDECOD"),
+  backend      = "tfrmt"
+)
+```
+
+> **Note:** `run()` returns only the ARD; the shell object is not carried
+> through the pipe. Always assign the hydrated shell to a variable before
+> calling `run()`, then pass it explicitly to `render()`. `ars_pipeline()`
+> handles this internally.
+
+### Available shells
+
+| Shell ID | Table | Key datasets | Key variables |
+|---|---|---|---|
+| `T-DM-01` | Demographic characteristics | ADSL | `TRT01A`, `SAFFL`, `AGE`, `SEX`, `RACE` |
+| `T-DS-01` | Subject disposition | ADSL | `TRT01A`, `RANDFL`, `SAFFL`, `COMPLFL`, `DCSREAS` |
+| `T-AE-01` | Overview of adverse events | ADAE, ADSL | `TRT01A`, `SAFFL`, `TRTEMFL`, `AEREL`, `AESER`, `AETOXGR`, `AEACN`, `AEOUT` |
+| `T-AE-02` | TEAEs by SOC and PT | ADAE, ADSL | `TRT01A`, `SAFFL`, `TRTEMFL`, `AEBODSYS`, `AEDECOD` |
+| `T-LB-01` | Summary of laboratory parameters | ADLB, ADSL | `TRT01A`, `SAFFL`, `PARAMCD`, `ANL01FL`, `ABLFL`, `AVAL`, `CHG` |
+| `T-LB-02` | Shift table (baseline vs. worst post-baseline) | ADLB, ADSL | `TRT01A`, `SAFFL`, `PARAMCD`, `ANL01FL`, `BNRIND`, `WGRNRIND` |
+
+Browse all available shells programmatically:
+
+```r
+browse_shells()
+```
+
+---
+
 ## Getting started (new contributors)
 
 ### 1. Clone the repo with all submodules
