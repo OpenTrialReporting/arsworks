@@ -66,9 +66,17 @@ There are two equivalent patterns for generating a table.
 
 ```r
 use_shell("T-AE-02") |>
-  hydrate(variable_map = c(TRT01A = "TRT01A", SAFFL = "SAFFL",
-                            TRTEMFL = "TRTEMFL",
-                            AEBODSYS = "AEBODSYS", AEDECOD = "AEDECOD")) |>
+  hydrate(
+    variable_map = c(TRT01A = "TRT01A", SAFFL = "SAFFL",
+                     TRTEMFL = "TRTEMFL",
+                     AEBODSYS = "AEBODSYS", AEDECOD = "AEDECOD"),
+    group_map = list(
+      GRP_TRT = list(
+        list(id = "GRP_TRT_A", value = "Treatment A", order = 1L),
+        list(id = "GRP_TRT_B", value = "Treatment B", order = 2L)
+      )
+    )
+  ) |>
   run(adam = list(ADAE = adae, ADSL = adsl)) |>
   render(backend = "tfrmt")
 ```
@@ -82,6 +90,12 @@ ars_pipeline(
   variable_map = c(TRT01A = "TRT01A", SAFFL = "SAFFL",
                    TRTEMFL = "TRTEMFL",
                    AEBODSYS = "AEBODSYS", AEDECOD = "AEDECOD"),
+  group_map    = list(
+    GRP_TRT = list(
+      list(id = "GRP_TRT_A", value = "Treatment A", order = 1L),
+      list(id = "GRP_TRT_B", value = "Treatment B", order = 2L)
+    )
+  ),
   backend      = "tfrmt"
 )
 ```
