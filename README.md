@@ -111,6 +111,11 @@ ars_pipeline(
 | `T-LB-01` | Summary of laboratory parameters | ADLB, ADSL | `TRT01A`, `SAFFL`, `PARAMCD`, `ANL01FL`, `ABLFL`, `AVAL`, `CHG` |
 | `T-LB-02` | Shift table (baseline vs. worst post-baseline) | ADLB, ADSL | `TRT01A`, `SAFFL`, `PARAMCD`, `ANL01FL`, `BNRIND`, `WGRNRIND` |
 
+> **Note:** All 6 installed shells use Mode 2 (pre-specified) treatment arm
+> groupings. You must always supply  to  with the
+> treatment arm values from your study data. Without it, all arms will
+> return identical results (the full dataset, unfiltered).
+
 Browse all available shells programmatically:
 
 ```r
@@ -161,10 +166,21 @@ devtools::install("ars")
 
 ```r
 library(ars)
+source("data_table_examples.R")  # creates adsl, adae, adlb
 
 use_shell("T-AE-02") |>
-  hydrate(variable_map) |>
-  run(adam) |>
+  hydrate(
+    variable_map = c(TRT01A = "TRT01A", SAFFL = "SAFFL",
+                     TRTEMFL = "TRTEMFL",
+                     AEBODSYS = "AEBODSYS", AEDECOD = "AEDECOD"),
+    group_map = list(
+      GRP_TRT = list(
+        list(id = "GRP_TRT_A", value = "Treatment A", order = 1L),
+        list(id = "GRP_TRT_B", value = "Treatment B", order = 2L)
+      )
+    )
+  ) |>
+  run(adam = list(ADAE = adae, ADSL = adsl)) |>
   render(backend = "tfrmt")
 ```
 
