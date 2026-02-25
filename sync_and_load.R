@@ -37,7 +37,20 @@ pull_results <- vapply(PACKAGES, function(pkg) {
   return(label)
 }, character(1L))
 
-# ── 2. Reload all packages in dependency order ────────────────────────────────
+# ── 2. Document + reload all packages in dependency order ─────────────────────
+
+message("\n── Documenting packages ────────────────────────────────────────────────")
+
+for (pkg in PACKAGES) {
+  path <- file.path(ROOT, pkg)
+  if (!dir.exists(path)) next
+  tryCatch({
+    devtools::document(path, quiet = TRUE)
+    message(sprintf("  documented  %s", pkg))
+  }, error = function(e) {
+    message(sprintf("  WARN  %s  document() failed: %s", pkg, conditionMessage(e)))
+  })
+}
 
 message("\n── Reloading packages ──────────────────────────────────────────────────")
 
