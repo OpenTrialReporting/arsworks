@@ -1,15 +1,21 @@
 # sync_and_load.R -------------------------------------------------------------
 #
-# Pulls the latest commits from all five sub-package repos and reloads them
-# into the current R session using devtools::load_all().
+# Documents and loads all five sub-packages into the current R session.
+# Run this at the start of every session, or after pulling new changes.
+#
+# What it does:
+#   1. git pull --ff-only on each sub-package (skipped if no .git present)
+#   2. devtools::document() on each sub-package  ← regenerates NAMESPACE files,
+#      which are NOT tracked in the repos and must be built locally
+#   3. devtools::load_all() on each sub-package in dependency order
 #
 # Usage:
 #   source("sync_and_load.R")
 #
 # Prerequisites:
-#   - git must be on PATH
+#   - renv::restore() must have been run at least once in this project
+#   - git must be on PATH (only needed for the pull step)
 #   - You must be inside the arsworks/ directory (or adjust ROOT below)
-#   - Each sub-package must have its own .git/ and an 'origin' remote
 
 ROOT <- normalizePath(dirname(rstudioapi::getSourceEditorContext()$path))
 

@@ -16,8 +16,19 @@ This repository does not contain package source code itself. It holds:
 ```bash
 git clone --recurse-submodules https://github.com/OpenTrialReporting/arsworks.git
 cd arsworks
-Rscript -e "renv::restore()"
 ```
+
+Then open `arsworks.Rproj` in RStudio and run:
+
+```r
+renv::restore()        # install all dependencies — say Y to the "unknown source" prompt
+source("sync_and_load.R")  # document + load all five packages into your session
+```
+
+> **Why `sync_and_load.R` instead of `library()`?** The five sub-packages are loaded
+> from local source (via `devtools::load_all()`), not from an installed library. The
+> script also runs `devtools::document()` first to regenerate `NAMESPACE` files, which
+> are not tracked in the repos and must be built locally on every fresh clone.
 
 ---
 
@@ -51,13 +62,17 @@ together.
 
 ## Usage
 
-The examples below use the synthetic ADaM datasets in `data_table_examples.R`
-(60 subjects, 3 arms). Run that script first to create `adsl`, `adae`, and
-`adlb` in your session, then load `ars`.
+Start each session by sourcing the loader script — it documents and loads all
+five packages in one step:
 
 ```r
-source("data_table_examples.R")
-library(ars)
+source("sync_and_load.R")
+```
+
+Then load the example data:
+
+```r
+source("data_table_examples.R")  # creates adsl, adae, adlb in your session
 ```
 
 There are two equivalent patterns for generating a table.
@@ -112,9 +127,10 @@ ars_pipeline(
 | `T-LB-02` | Shift table (baseline vs. worst post-baseline) | ADLB, ADSL | `TRT01A`, `SAFFL`, `PARAMCD`, `ANL01FL`, `BNRIND`, `WGRNRIND` |
 
 > **Note:** All 6 installed shells use Mode 2 (pre-specified) treatment arm
-> groupings. You must always supply  to  with the
-> treatment arm values from your study data. Without it, all arms will
-> return identical results (the full dataset, unfiltered).
+> groupings. You must always supply a `group_map` to `hydrate()` mapping your
+> study's treatment arm values (e.g. `"Placebo"`, `"Xanomeline Low Dose"`) to
+> group IDs. Without it, all arms will return identical results (the full
+> dataset, unfiltered).
 
 Browse all available shells programmatically:
 
@@ -148,24 +164,28 @@ activate automatically via `.Rprofile`. Then restore the pinned packages:
 renv::restore()
 ```
 
-This installs every dependency at the exact versions recorded in `renv.lock`.
+> **Expected prompt:** renv will warn that `arscore`, `arsresult`, `arsshells`,
+> and `arstlf` are from an "unknown source" (they are local submodules, not on
+> CRAN). **Enter `Y` to proceed.** This is expected behaviour.
 
-### 3. Install the arsworks packages from local source
+### 3. Load the arsworks packages
 
-Install the packages in dependency order:
+The five sub-packages are loaded from local source, not from an installed
+library. The `sync_and_load.R` script handles this in one step: it runs
+`devtools::document()` (to regenerate `NAMESPACE` files, which are not tracked
+in the repos) and then `devtools::load_all()` for each package in dependency
+order.
 
 ```r
-devtools::install("arscore")
-devtools::install("arsshells")
-devtools::install("arsresult")
-devtools::install("arstlf")
-devtools::install("ars")
+source("sync_and_load.R")
 ```
+
+Run this at the start of every session, or whenever you pull new changes to a
+sub-package.
 
 ### 4. Verify
 
 ```r
-library(ars)
 source("data_table_examples.R")  # creates adsl, adae, adlb
 
 use_shell("T-AE-02") |>
@@ -175,8 +195,9 @@ use_shell("T-AE-02") |>
                      AEBODSYS = "AEBODSYS", AEDECOD = "AEDECOD"),
     group_map = list(
       GRP_TRT = list(
-        list(id = "GRP_TRT_A", value = "Treatment A", order = 1L),
-        list(id = "GRP_TRT_B", value = "Treatment B", order = 2L)
+        list(id = "GRP_TRT_A", value = "Placebo",              order = 1L),
+        list(id = "GRP_TRT_B", value = "Xanomeline Low Dose",  order = 2L),
+        list(id = "GRP_TRT_C", value = "Xanomeline High Dose", order = 3L)
       )
     )
   ) |>
