@@ -1145,3 +1145,83 @@ See `arsshells/REFERENCE.md` for the full 55-shell inventory.
 |------|----------|-------|
 | `AGENTS.md` / memory files — keep in sync with MASTER_PLAN.md §0 | Ongoing | Run `/memory` update after any §0 change |
 | arscore vignette: "JSON Round-Trip and Validation" | Low | Currently missing; `complete-reporting-event` vignette exists |
+
+---
+
+## 21. Refactor: Split Composite Operations into Separate Declared Operations
+
+### Background
+
+The CSD reference file (`Common Safety Displays.json`) defines Min and Max as two
+independent, first-class operations on `Mth02_ContVar_Summ_ByGrp`:
+
+```json
+{ "id": "Mth02_ContVar_Summ_ByGrp_7_Min", "name": "Minimum", "order": 7, "resultPattern": "XX" },
+{ "id": "Mth02_ContVar_Summ_ByGrp_8_Max", "name": "Maximum", "order": 8, "resultPattern": "XX" }
+```
+
+Each has its own result row in every analysis that uses the method.
+
+### Current arsshells / arsresult approach (problem)
+
+`METH_CONT` currently models range as a **composite operation** `OP_RANGE` whose
+R function returns a named vector with three elements: `OP_MIN`, `OP_MAX`, and
+`OP_RANGE`.  `arsresult::run()` appends all three as result rows — but the method
+only *declares* `OP_RANGE`.  The undeclared scalar rows (`OP_MIN`, `OP_MAX`) are
+spurious from the ARS model's perspective and cause cascading issues:
+
+| Affected area | Problem |
+|---|---|
+| `validate_reporting_event()` | Rejects result rows whose `operation_id` is not in the method |
+| `.embed_ard_into_re()` | Requires a pre-filter to strip undeclared rows before Layer 1 validation |
+| CDISC JSON Schema (Layer 2) | Same undeclared IDs cause schema failures if not stripped |
+| `frmt_combine()` in arstlf | Relies on the scalar rows being *present* in the ARD — contradicts the filter |
+
+The same pattern exists for `OP_MEAN_SD` (emits `OP_MEAN`, `OP_SD`, `OP_MEAN_SD`).
+
+### Target design (aligned with CSD)
+
+Declare every scalar that the method produces as a **formal operation**.  Remove
+composite operations entirely.
+
+#### `METH_CONT` — proposed operation list
+
+| ID | Label | Pattern |
+|----|-------|---------|
+| `OP_N` | n | `xx` |
+| `OP_MEAN` | Mean | `xx.x` |
+| `OP_SD` | SD | `(xx.xx)` |
+| `OP_MEDIAN` | Median | `xx.x` |
+| `OP_Q1` | Q1 | `xx.x` |
+| `OP_Q3` | Q3 | `xx.x` |
+| `OP_MIN` | Min | `xx` |
+| `OP_MAX` | Max | `xx` |
+
+`OP_MEAN_SD` and `OP_RANGE` are **removed**.  `arstlf`'s `frmt_combine()` calls
+are updated to compose `OP_MEAN + OP_SD` and `OP_MIN + OP_MAX` at render time
+rather than expecting pre-composed operation IDs.
+
+### Affected files
+
+| Package | File | Change |
+|---------|------|--------|
+| `arsresult` | `R/stdlib.R` (METH_CONT handler) | Return individual scalars only; remove composite vectors |
+| `arsshells` | `inst/templates/tables/T-DM-01.json` | Replace `OP_MEAN_SD` / `OP_RANGE` with flat operation list |
+| `arsshells` | `inst/templates/tables/T-VS-01.json` (and any new templates) | Define flat from the start |
+| `arsshells` | `R/hydrate.R` shell cell linking | Update any cell → operation links that reference composite IDs |
+| `arstlf` | `R/render.R` / tfrmt spec builder | Replace `frmt_combine()` references to `OP_MEAN_SD` / `OP_RANGE` with two-scalar compose |
+| `ars_explorer.R` | `.embed_ard_into_re()` | Pre-filter becomes unnecessary once all operations are declared; can be simplified or removed |
+| Tests | All packages | Update expected operation IDs and ARD shapes |
+
+### Migration notes
+
+- `.embed_ard_into_re()` pre-filter logic can be **removed** after this refactor
+  because there will be no undeclared operation IDs to strip.
+- The `arsresult` warning for unresolved data-driven groupings is unrelated and
+  should be retained.
+- Shell cell references in JSON templates that currently point to `OP_MEAN_SD`
+  or `OP_RANGE` must be updated to the new scalar IDs; the `validate_shell()`
+  step will catch any that are missed.
+- Any existing integration tests that assert on ARD column counts or operation
+  ID sets will need updating — run the full test suite across all packages after
+  the change.
