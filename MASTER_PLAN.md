@@ -1101,6 +1101,27 @@ current rework but must not be lost. Grouped by package.
 
 ### arsshells — template library expansion
 
+> **Note — T-AE-02 is a deliberate workaround.**
+> The current T-AE-02 template uses a "one analysis per table cell" structure: each
+> SOC/PT × arm combination is a separate analysis, and each `dataSubset` bakes in
+> both `TRTEMFL=Y` and the hardcoded SOC or PT term.  Arm selection is done via the
+> arscore `groupId` extension on `orderedGroupings` (`resultsByGroup: false`,
+> `groupId: GRP_TRT_A`), which pins each analysis to a single arm and produces
+> exactly one result row.
+>
+> This was necessary because `arsresult::run()` does not yet support data-driven
+> groupings on event-level data (ADAE).  The CSD target pattern uses two data-driven
+> grouping factors (`AnlsGrouping_06_Soc` on `AESOC`, `AnlsGrouping_07_Pt` on
+> `AEDECOD`), a single TEAE data subset (`TRTEMFL=Y` only), and `resultsByGroup: true`
+> across Trt × SOC × PT — yielding a handful of analyses with large ARDs rather than
+> 33 single-cell analyses.
+>
+> **Do not model new AE templates after T-AE-02.**  The full migration requires:
+> 1. `arsresult::run()` support for `resultsByGroup: true` with data-driven AE groupings.
+> 2. Replacing all SOC/PT `dataSubsets` in T-AE-02 with data-driven grouping factors.
+> 3. Replacing the `groupId` arm-pin pattern with standard multi-arm grouping.
+> 4. Retiring the `groupId` arscore extension once no templates depend on it.
+
 **Priority 2 — next batch (6 templates):**
 
 | ID | Name | Dataset |
@@ -1124,7 +1145,7 @@ See `arsshells/REFERENCE.md` for the full 55-shell inventory.
 | Arrow / DuckDB integration tests | Medium | Backend-agnostic transpiler needs backend tests |
 | `IS_NULL` / `NOT_NULL` comparator support | Low | Rare in CDISC standards; log as known limitation until needed |
 | **Support `resultsByGroup: false` / no-`groupId` result pattern for comparison analyses** | Medium | CSD p-value analyses (`Mth03_CatVar_Comp_PChiSq`, `Mth04_ContVar_Comp_Anova`, `Mth05_CatVar_Comp_FishEx`) set `resultsByGroup: false` on all groupings and emit a single result whose `resultGroups` carry only `groupingId` (no `groupId`). The current stdlib has no comparison methods and `run()` always writes a `groupId`; both need extending. The `ars_operation_result` S7 class must allow `resultGroups` entries with an absent `groupId`. |
-| **`dataSubsetId` support for pairwise comparisons** | Medium | CSD handles placebo-vs-arm comparisons by attaching a named `dataSubset` to the analysis (e.g. `Dss11_TEAE_PlacLow` filters `TRT01A IN ("Placebo", "Xanomeline Low Dose")`). The analysis still uses the full treatment grouping; the subset pre-restricts the rows. `arsresult::run()` must apply the `dataSubsetId` filter before executing the method. Shell templates for T-AE-02 and future AE/VS templates should declare their subsets in `dataSubsets` and reference them on the relevant analyses. |
+| **`dataSubsetId` runtime filtering in `arsresult::run()`** | Medium | CSD attaches a named `dataSubset` to each analysis as a record-level pre-filter (e.g. `Dss01_TEAE`: `TRTEMFL=Y`); `run()` must apply this filter before executing the method. Note: T-AE-02 already sets `dataSubsetId` on every analysis, but its subsets bake in hardcoded SOC/PT terms as a workaround for missing data-driven grouping support — so `dataSubsetId` filtering may currently be silently ignored and T-AE-02 still passes tests via the `groupId` arm-pin.  Verify whether `run()` applies the filter at all before implementing. Once `dataSubsetId` filtering works, T-AE-02 can be migrated to the CSD pattern (single `TRTEMFL=Y` subset + data-driven groupings). |
 
 ### arstlf
 
