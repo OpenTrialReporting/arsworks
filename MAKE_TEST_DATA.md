@@ -615,6 +615,51 @@ ars_pipeline(
 
 ---
 
+## pharmaverseadam compatibility notes
+
+The synthetic datasets above have `ABLFL` and `ANL01FL` correctly co-populated
+on baseline rows (`ABLFL = "Y"`, `ANL01FL = "Y"`). **pharmaverseadam ADLB does
+not.** In pharmaverseadam, `ABLFL = "Y"` and `ANL01FL = "Y"` never appear on
+the same row, which breaks T-LB-01.
+
+### Root cause
+
+T-LB-01 uses two complementary data subset filters:
+
+| Subset | Filter | Selects |
+|--------|--------|---------|
+| Baseline statistics | `ANL01FL EQ "Y" AND ABLFL EQ "Y"` | Baseline value |
+| Change-from-baseline | `ANL01FL EQ "Y" AND ABLFL NE "Y"` | Analysis visit value |
+
+In pharmaverseadam ADLB the baseline row has `ABLFL = "Y"` but `ANL01FL` is
+`NA` (not `"Y"`), so the first filter matches nothing. All baseline cells
+return 0 / NA / Inf.
+
+### Required derivation (must run before `hydrate()` / `run()`)
+
+```r
+# Step 1 — set ANL01FL = "Y" on every baseline row
+adlb$ANL01FL[!is.na(adlb$ABLFL) & adlb$ABLFL == "Y"] <- "Y"
+
+# Step 2 — set ABLFL = "N" on analysis-visit rows that already have
+#           ANL01FL = "Y" but no ABLFL value, so the CHG filter
+#           (ABLFL NE "Y") continues to exclude the baseline row
+adlb$ABLFL[!is.na(adlb$ANL01FL) & adlb$ANL01FL == "Y" & is.na(adlb$ABLFL)] <- "N"
+```
+
+After these two steps pharmaverseadam ADLB satisfies the same flag contract as
+the synthetic data: baseline rows have both `ABLFL = "Y"` and `ANL01FL = "Y"`;
+post-baseline analysis-visit rows have `ABLFL = "N"` (or `NA` treated as not
+`"Y"` by the NA-safe `NE` transpiler) and `ANL01FL = "Y"`.
+
+> **Why this is safe:** The `NE` comparator in `arsresult` transpiles to
+> `is.na(var) | var != val`, so `ABLFL NE "Y"` already matches rows where
+> `ABLFL` is `NA`. Step 2 above is therefore a tidying step rather than a
+> correctness fix for CHG filtering — but it makes the flag semantics
+> explicit and avoids confusion if ABLFL is inspected directly.
+
+---
+
 ## When to update this file
 
 Once **Phase A** of `PLAN_DATA_DRIVEN_GROUPS.md` is complete:
