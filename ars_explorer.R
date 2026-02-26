@@ -177,7 +177,7 @@ arsExplorerUI <- function(id) {
       nav_panel(
         title = "Shell",
         icon  = icon("info-circle"),
-        verbatimTextOutput(ns("shell_summary"))
+        gt::gt_output(ns("shell_mock"))
       ),
       nav_panel(
         title = "ARD",
@@ -448,11 +448,18 @@ arsExplorerServer <- function(id, adam_reactive) {
       datasets
     })
 
-    # ── Output: shell summary (Shell tab) ─────────────────────────────────────
-    output$shell_summary <- renderPrint({
+    # ── Output: mock-rendered shell (Shell tab) ───────────────────────────────
+    output$shell_mock <- gt::render_gt({
       sh <- shell_obj()
       req(sh)
-      print(sh)
+      tryCatch(
+        render_mock(sh),
+        error = function(e) {
+          showNotification(paste("Mock render failed:", conditionMessage(e)),
+                           type = "warning", duration = 6)
+          NULL
+        }
+      )
     })
 
     # ── State: ARD and table results ──────────────────────────────────────────
