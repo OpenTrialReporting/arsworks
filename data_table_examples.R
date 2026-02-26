@@ -76,6 +76,24 @@ adlb$WGRNRIND <- adlb$ANRIND
 # Carry SAFFL from ADSL
 adlb$SAFFL <- adsl$SAFFL[match(adlb$USUBJID, adsl$USUBJID)]
 
+# ── ADLB flag alignment for T-LB-01 ──────────────────────────────────────────
+#
+# In pharmaverseadam, ABLFL = "Y" and ANL01FL = "Y" are mutually exclusive:
+#   ABLFL = "Y"   → baseline observation (ANL01FL = NA, CHG = NA)
+#   ANL01FL = "Y" → analysis visits     (ABLFL = NA,  CHG populated)
+#
+# The T-LB-01 shell filters:
+#   BL rows:  ANL01FL EQ "Y" AND ABLFL EQ "Y"   → compute stats on AVAL
+#   CHG rows: ANL01FL EQ "Y" AND ABLFL NE "Y"   → compute stats on CHG
+#
+# NE is transpiled as !=; in R, NA != "Y" evaluates to NA (not TRUE), so rows
+# with ABLFL = NA are excluded from both filters, giving zeros/NA/Inf.
+#
+# Fix 1: mark baseline records as analysis records so the BL filter can match.
+# Fix 2: replace NA with "N" on post-baseline analysis rows so NE "Y" is TRUE.
+adlb$ANL01FL[!is.na(adlb$ABLFL) & adlb$ABLFL == "Y"] <- "Y"
+adlb$ABLFL[!is.na(adlb$ANL01FL) & adlb$ANL01FL == "Y" & is.na(adlb$ABLFL)] <- "N"
+
 # ── Verify ────────────────────────────────────────────────────────────────────
 
 cat("=== adsl (SAF population by arm) ===\n")
@@ -110,6 +128,19 @@ cat("\nDone. Objects created: adsl, adae, adlb\n")
 # Pattern B — ars_pipeline():
 #   All-in-one wrapper; simpler for scripts.
 
+# Semantic overrides — category codings that cannot be resolved by
+# case-insensitive matching alone. Capitalisation mismatches (RACE, BNRIND,
+# WGRNRIND) are handled automatically by hydrate() when adam is supplied.
+#
+#   AEREL: template uses "RELATED"; pharmaverseadam uses "REMOTE"
+#   AEACN: template uses "DRUG WITHDRAWN"; all events here are "DOSE NOT CHANGED"
+#
+# Only T-AE-01 needs these; other shells require no explicit value_map.
+ae01_value_map <- list(
+  AEREL = c("RELATED"        = "REMOTE"),
+  AEACN = c("DRUG WITHDRAWN" = "DOSE NOT CHANGED")
+)
+
 # Shared group_map — 3 arms from CDISCPILOT01
 # 'value'  = the TRT01A value used to filter the data
 # 'label'  = the column header shown in the rendered table (N=xx resolved at render time)
@@ -127,12 +158,13 @@ ard_dm01 <- use_shell("T-DM-01") |>
   hydrate(
     variable_map = c(TRT01A = "TRT01A", SAFFL = "SAFFL",
                      AGE = "AGE", SEX = "SEX", RACE = "RACE"),
-    group_map    = grp_map
+    group_map    = grp_map,
+    adam         = list(ADSL = adsl)   # triggers auto value-map discovery
   ) |>
   run(adam = list(ADSL = adsl))
 render(ard_dm01, backend = "tfrmt")
 
-# ars_pipeline() equivalent
+# ars_pipeline() equivalent — adam is used for both hydration and run()
 ars_pipeline(
   shell        = "T-DM-01",
   adam         = list(ADSL = adsl),
@@ -149,7 +181,8 @@ ard_ds01 <- use_shell("T-DS-01") |>
     variable_map = c(TRT01A = "TRT01A", RANDFL = "RANDFL",
                      SAFFL = "SAFFL", COMPLFL = "COMPLFL",
                      DCSREAS = "DCSREAS"),
-    group_map    = grp_map
+    group_map    = grp_map,
+    adam         = list(ADSL = adsl)
   ) |>
   run(adam = list(ADSL = adsl))
 render(ard_ds01, backend = "tfrmt")
@@ -173,7 +206,9 @@ ard_ae01 <- use_shell("T-AE-01") |>
                      TRTEMFL = "TRTEMFL", AEREL = "AEREL",
                      AESER = "AESER", AETOXGR = "AETOXGR",
                      AEACN = "AEACN", AEOUT = "AEOUT"),
-    group_map    = grp_map
+    value_map    = ae01_value_map,     # only the semantic overrides
+    group_map    = grp_map,
+    adam         = list(ADAE = adae, ADSL = adsl)
   ) |>
   run(adam = list(ADAE = adae, ADSL = adsl))
 render(ard_ae01, backend = "tfrmt")
@@ -186,6 +221,7 @@ ars_pipeline(
                    TRTEMFL = "TRTEMFL", AEREL = "AEREL",
                    AESER = "AESER", AETOXGR = "AETOXGR",
                    AEACN = "AEACN", AEOUT = "AEOUT"),
+  value_map    = ae01_value_map,
   group_map    = grp_map,
   backend      = "tfrmt"
 )
@@ -197,7 +233,8 @@ ard_ae02 <- use_shell("T-AE-02") |>
     variable_map = c(TRT01A = "TRT01A", SAFFL = "SAFFL",
                      TRTEMFL = "TRTEMFL",
                      AEBODSYS = "AEBODSYS", AEDECOD = "AEDECOD"),
-    group_map    = grp_map
+    group_map    = grp_map,
+    adam         = list(ADAE = adae, ADSL = adsl)
   ) |>
   run(adam = list(ADAE = adae, ADSL = adsl))
 render(ard_ae02, backend = "tfrmt")
@@ -220,7 +257,8 @@ ard_lb01 <- use_shell("T-LB-01") |>
     variable_map = c(TRT01A = "TRT01A", SAFFL = "SAFFL",
                      PARAMCD = "PARAMCD", ANL01FL = "ANL01FL",
                      ABLFL = "ABLFL", AVAL = "AVAL", CHG = "CHG"),
-    group_map    = grp_map
+    group_map    = grp_map,
+    adam         = list(ADLB = adlb, ADSL = adsl)
   ) |>
   run(adam = list(ADLB = adlb, ADSL = adsl))
 render(ard_lb01, backend = "tfrmt")
@@ -244,7 +282,8 @@ ard_lb02 <- use_shell("T-LB-02") |>
     variable_map = c(TRT01A = "TRT01A", SAFFL = "SAFFL",
                      PARAMCD = "PARAMCD", ANL01FL = "ANL01FL",
                      BNRIND = "BNRIND", WGRNRIND = "WGRNRIND"),
-    group_map    = grp_map
+    group_map    = grp_map,
+    adam         = list(ADLB = adlb, ADSL = adsl)
   ) |>
   run(adam = list(ADLB = adlb, ADSL = adsl))
 render(ard_lb02, backend = "tfrmt")
