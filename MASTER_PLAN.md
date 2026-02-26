@@ -1097,6 +1097,7 @@ current rework but must not be lost. Grouped by package.
 | Coverage measurement with `covr` | Low | Identify untested paths |
 | `format()` improvements for `ars_method`, `ars_output`, `ars_analysis` | Low | Show operation IDs / display names inline; pattern set by `ars_document_reference` |
 | Package logo | Low | Cosmetic |
+| **Emit `@type: "ReportingEvent"` from `reporting_event_to_json()`** | Medium | CSD root object carries `@type`; its absence likely causes the CDISC JSON Schema root-level type discriminator to fail. Add to `to_list.ars_reporting_event` before serialisation; re-run Layer 2 validation to confirm improvement. |
 
 ### arsshells — template library expansion
 
@@ -1122,6 +1123,8 @@ See `arsshells/REFERENCE.md` for the full 55-shell inventory.
 | Additional stdlib methods: geometric mean, Kaplan–Meier, Cox HR | Medium | Needed for T-EF-04, survival tables |
 | Arrow / DuckDB integration tests | Medium | Backend-agnostic transpiler needs backend tests |
 | `IS_NULL` / `NOT_NULL` comparator support | Low | Rare in CDISC standards; log as known limitation until needed |
+| **Support `resultsByGroup: false` / no-`groupId` result pattern for comparison analyses** | Medium | CSD p-value analyses (`Mth03_CatVar_Comp_PChiSq`, `Mth04_ContVar_Comp_Anova`, `Mth05_CatVar_Comp_FishEx`) set `resultsByGroup: false` on all groupings and emit a single result whose `resultGroups` carry only `groupingId` (no `groupId`). The current stdlib has no comparison methods and `run()` always writes a `groupId`; both need extending. The `ars_operation_result` S7 class must allow `resultGroups` entries with an absent `groupId`. |
+| **`dataSubsetId` support for pairwise comparisons** | Medium | CSD handles placebo-vs-arm comparisons by attaching a named `dataSubset` to the analysis (e.g. `Dss11_TEAE_PlacLow` filters `TRT01A IN ("Placebo", "Xanomeline Low Dose")`). The analysis still uses the full treatment grouping; the subset pre-restricts the rows. `arsresult::run()` must apply the `dataSubsetId` filter before executing the method. Shell templates for T-AE-02 and future AE/VS templates should declare their subsets in `dataSubsets` and reference them on the relevant analyses. |
 
 ### arstlf
 
