@@ -112,6 +112,82 @@ library(ars)
   Filter(function(gf) !isTRUE(gf@data_driven), shell@reporting_event@analysis_groupings)
 }
 
+# ── Helper: embed ARD results into a reporting event (ARS model) ──────────────
+#
+# create_ard() flattens the analysis@results tree into a tidy tibble.
+# This function is the inverse: it reconstructs ars_operation_result /
+# ars_result_group objects from each ARD row and writes them back into the
+# corresponding analyses, producing a fully-populated ars_reporting_event
+# that conforms to the CDISC ARS v1.0 model.
+#
+# ARD column conventions (from create_ard()):
+#   1 result group  → grouping_id,   group_id,   group_value   (no suffix)
+#   N result groups → grouping_id_1, group_id_1, group_value_1, ... _N
+
+.rgs_from_ard_row <- function(row) {
+  make_rg <- function(gid, grp_id, grp_val) {
+    if (is.null(gid) || is.na(gid) || !nzchar(gid)) return(NULL)
+    arscore::new_ars_result_group(
+      grouping_id = gid,
+      group_id    = if (!is.null(grp_id)  && !is.na(grp_id)  && nzchar(grp_id))  grp_id  else NA_character_,
+      group_value = if (!is.null(grp_val) && !is.na(grp_val) && nzchar(grp_val)) grp_val else NA_character_
+    )
+  }
+
+  if ("grouping_id" %in% names(row)) {
+    rg <- make_rg(row[["grouping_id"]], row[["group_id"]], row[["group_value"]])
+    return(if (!is.null(rg)) list(rg) else list())
+  }
+
+  rgs <- list()
+  i   <- 1L
+  repeat {
+    col <- paste0("grouping_id_", i)
+    if (!col %in% names(row)) break
+    rg <- make_rg(row[[col]],
+                  row[[paste0("group_id_",    i)]],
+                  row[[paste0("group_value_", i)]])
+    if (!is.null(rg)) rgs <- c(rgs, list(rg))
+    i <- i + 1L
+  }
+  rgs
+}
+
+.embed_ard_into_re <- function(re, ard) {
+  # Build lookup: analysis_id → list of ars_operation_result
+  an_results <- list()
+
+  for (i in seq_len(nrow(ard))) {
+    row   <- as.list(ard[i, , drop = FALSE])
+    an_id <- row[["analysis_id"]]
+    op_id <- row[["operation_id"]]
+    raw_v <- row[["raw_value"]]
+    fmt_v <- row[["formatted_value"]]
+
+    # ars_operation_result requires at least one non-NA value; mirror run.R
+    raw_chr <- if (!is.null(raw_v) && !is.na(raw_v)) as.character(raw_v) else "NA"
+    fmt_chr <- if (!is.null(fmt_v) && !is.na(fmt_v)) as.character(fmt_v) else NA_character_
+
+    op_res <- arscore::new_ars_operation_result(
+      operation_id    = op_id,
+      result_groups   = .rgs_from_ard_row(row),
+      raw_value       = raw_chr,
+      formatted_value = fmt_chr
+    )
+
+    an_results[[an_id]] <- c(an_results[[an_id]], list(op_res))
+  }
+
+  # Write results back into each analysis in the reporting event
+  re@analyses <- lapply(re@analyses, function(an) {
+    res <- an_results[[an@id]]
+    if (!is.null(res)) an@results <- res
+    an
+  })
+
+  re
+}
+
 # ── Module UI ──────────────────────────────────────────────────────────────────
 
 arsExplorerUI <- function(id) {
@@ -789,12 +865,27 @@ arsExplorerServer <- function(id, adam_reactive) {
         strong("Export"),
         div(
           class = "d-grid gap-1 mt-2",
+
+          # Primary: full ARS (reporting event + embedded results) — after ARD
+          if (has_ard)
+            downloadButton(
+              outputId = ns("dl_full_ars"),
+              label    = tags$span(
+                           icon("star", class = "me-1"),
+                           "Full ARS with results (.json)"
+                         ),
+              class    = "btn-sm btn-primary text-start"
+            ),
+
+          # Secondary: reporting event spec only (hydrated if ARD, raw otherwise)
           downloadButton(
             outputId = ns("dl_json"),
-            label    = if (has_ard) "Reporting Event — hydrated (.json)"
-                       else         "Reporting Event — raw (.json)",
+            label    = if (has_ard) "Reporting Event spec (.json)"
+                       else         "Reporting Event (.json)",
             class    = "btn-sm btn-outline-secondary text-start"
           ),
+
+          # ARD flat file — after ARD
           if (has_ard)
             downloadButton(
               outputId = ns("dl_ard"),
@@ -805,13 +896,25 @@ arsExplorerServer <- function(id, adam_reactive) {
       )
     })
 
-    # ── Download: ARS reporting event as JSON ─────────────────────────────────
-    # Uses the hydrated shell's reporting event when ARD is available (it
-    # contains real arm values and group conditions), otherwise the raw shell.
+    # ── Download: full ARS — reporting event with results embedded ────────────
+    output$dl_full_ars <- downloadHandler(
+      filename = function() {
+        paste0(input$shell_id %||% "ars", "_full_ars.json")
+      },
+      content = function(file) {
+        re_with_results <- .embed_ard_into_re(
+          ard_result()$shell@reporting_event,
+          ard_result()$ard
+        )
+        writeLines(arscore::reporting_event_to_json(re_with_results), file)
+      }
+    )
+
+    # ── Download: reporting event spec only (no results) ─────────────────────
     output$dl_json <- downloadHandler(
       filename = function() {
         id     <- input$shell_id %||% "shell"
-        suffix <- if (!is.null(ard_result())) "_hydrated" else "_raw"
+        suffix <- if (!is.null(ard_result())) "_spec_hydrated" else "_spec_raw"
         paste0(id, "_reporting_event", suffix, ".json")
       },
       content = function(file) {
