@@ -1097,7 +1097,7 @@ current rework but must not be lost. Grouped by package.
 | Coverage measurement with `covr` | Low | Identify untested paths |
 | `format()` improvements for `ars_method`, `ars_output`, `ars_analysis` | Low | Show operation IDs / display names inline; pattern set by `ars_document_reference` |
 | Package logo | Low | Cosmetic |
-| **Emit `@type: "ReportingEvent"` from `reporting_event_to_json()`** | Medium | CSD root object carries `@type`; its absence likely causes the CDISC JSON Schema root-level type discriminator to fail. Add to `to_list.ars_reporting_event` before serialisation; re-run Layer 2 validation to confirm improvement. |
+| Emit `@type: "ReportingEvent"` from `reporting_event_to_json()` | Low | CSD root object carries `@type` as metadata. Confirmed **not** a source of Layer 2 schema failures: `@type` does not appear anywhere in the CDISC JSON Schema, and the root schema sets `additionalProperties: true` so the field is harmless either way. Add for completeness / CSD alignment only. |
 
 ### arsshells — template library expansion
 
