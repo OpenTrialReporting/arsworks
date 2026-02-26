@@ -12,7 +12,108 @@
 
 ---
 
-## 0. Current State (as of 2026-02-22, updated 2026-02-22 evening)
+## NEXT SESSION — 2026-02-27
+
+Prioritised sprint based on CSD analysis completed 2026-02-26.  Work the tasks
+in order — each one unblocks the next.
+
+---
+
+### Task 1 — Verify `dataSubsetId` filtering in `arsresult::run()` *(~30 min)*
+
+**Why first:** T-AE-02 sets `dataSubsetId` on every analysis but tests still pass,
+which suggests the filter is either silently ignored or is applied but harmless.
+We need to know the truth before building on top of it.
+
+**Actions:**
+1. Open `arsresult/R/run.R` and trace the analysis execution path.
+2. Check whether `analysis@data_subset_id` is ever looked up against
+   `re@data_subsets` and applied as a row filter.
+3. If ignored: implement the filter (look up `data_subset_id` → transpile its
+   `condition`/`compoundExpression` → apply before method dispatch).
+4. Add a test: RE with a `dataSubsetId` that filters to zero rows should return
+   zero-row results, not silently full results.
+
+**Outcome gate:** `dataSubsetId` is either confirmed working (with test) or fixed
+and tested.  This is a prerequisite for the T-AE-02 → CSD migration and for all
+future AE/VS templates.
+
+---
+
+### Task 2 — §21 Flat operations refactor *(half day)*
+
+See §21 for full background.  Remove `OP_RANGE` and `OP_MEAN_SD` composite
+operations; replace with separate declared `OP_MIN`/`OP_MAX` and
+`OP_MEAN`/`OP_SD`.
+
+**Why second:** Once `dataSubsetId` is confirmed, this is the highest-impact
+structural fix.  It eliminates the undeclared-operation-ID problem that forces
+`.embed_ard_into_re()` to pre-filter the ARD, simplifies schema validation, and
+brings `METH_CONT` into CSD alignment.
+
+**Sequence within the task:**
+1. `arsresult/R/stdlib.R` — change `METH_CONT` handler to return named list of
+   individual scalars only (no composite `OP_RANGE`/`OP_MEAN_SD`).
+2. `arsshells/inst/templates/tables/T-DM-01.json` — replace `OP_MEAN_SD`/
+   `OP_RANGE` with flat operation list; update any shell cell links.
+3. Update `ars_explorer.R` — `.embed_ard_into_re()` pre-filter becomes
+   unnecessary; simplify or remove it.
+4. Run the full test suite across all packages; fix breakages.
+5. Commit each package separately with targeted messages.
+
+**Outcome gate:** All tests green; `OP_RANGE`/`OP_MEAN_SD` absent from codebase;
+Layer 2 validation passes without the ARD pre-filter.
+
+---
+
+### Task 3 — `referencedOperationRelationships` on percentage operations *(~1 hour)*
+
+See §20 arsresult backlog for full background.
+
+**Why third:** After flat ops are in place, the denominator relationship can be
+declared correctly.  `METH_AE_FREQ`'s `OP_N_PCT` operation should reference
+`OP_N` (same analysis, numerator) and the header-count analysis `OP_N`
+(denominator).  `METH_CAT`'s `OP_PCT` similarly.
+
+**Actions:**
+1. Add `referencedOperationRelationships` to `OP_N_PCT` in `METH_AE_FREQ` in
+   `T-AE-01.json`, `T-AE-02.json`, and arsresult's stdlib method registry.
+2. Add the same to `OP_PCT` in `METH_CAT` in `T-DM-01.json`.
+3. Verify JSON round-trips and `validate_reporting_event()` accepts the
+   relationship references.
+
+**Outcome gate:** All `%` operations in templates carry formal denominator
+declarations; no validation errors introduced.
+
+---
+
+### Task 4 — `validate_ordered_groupings` reference check in arscore *(~45 min)*
+
+**Why fourth:** Quick validator win.  Currently `ordered_groupings` on an analysis
+can reference a `groupingId` that doesn't exist in `re@analysis_groupings` and the
+validator won't catch it.
+
+**Actions:**
+1. In `arscore/R/validate_reporting_event.R`, add a check: for each analysis,
+   each `ordered_grouping@grouping_id` must match an id in `re@analysis_groupings`.
+2. Add test: analysis referencing non-existent grouping should fail validation.
+
+**Outcome gate:** Validator catches the dangling reference; test added and green.
+
+---
+
+### Parking lot (not this session)
+
+| Item | Reason deferred |
+|------|-----------------|
+| T-AE-02 → CSD migration (data-driven SOC/PT groupings) | Depends on Tasks 1 + 2 being stable first |
+| `resultsByGroup: false` / no-groupId for comparison analyses | No comparison methods yet; lower urgency |
+| New templates (T-VS-01, T-AE-03…) | Do not build on old patterns until Task 2 complete |
+| `gt` backend in arstlf | Independent; good stretch goal if Tasks 1–4 run fast |
+
+---
+
+## 0. Current State (as of 2026-02-22, updated 2026-02-26)
 
 ### Suite overview
 
