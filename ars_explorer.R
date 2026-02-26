@@ -210,6 +210,32 @@ arsExplorerUI <- function(id) {
         icon  = icon("table"),
         uiOutput(ns("download_bar")),
         gt::gt_output(ns("rendered_gt"))
+      ),
+
+      nav_panel(
+        title = "Compare",
+        icon  = icon("left-right"),
+        layout_columns(
+          col_widths = c(6, 6),
+          card(
+            class = "h-100",
+            card_header(
+              class = "bg-light",
+              tags$span(icon("circle-xmark", class = "text-muted me-1"),
+                        "Without ARD", tags$small(class = "text-muted ms-1", "(mock)"))
+            ),
+            card_body(class = "p-2", gt::gt_output(ns("compare_mock")))
+          ),
+          card(
+            class = "h-100",
+            card_header(
+              class = "bg-light",
+              tags$span(icon("circle-check", class = "text-success me-1"),
+                        "With ARD", tags$small(class = "text-muted ms-1", "(rendered)"))
+            ),
+            card_body(class = "p-2", uiOutput(ns("compare_rendered_ui")))
+          )
+        )
       )
     )
   )
@@ -675,7 +701,7 @@ arsExplorerServer <- function(id, adam_reactive) {
       })
 
       if (!is.null(table_result())) {
-        nav_select(id = "tabs", selected = "Table", session = session)
+        nav_select(id = "tabs", selected = "Compare", session = session)
         showNotification("Table rendered.", type = "message", duration = 3)
       }
     })
@@ -721,6 +747,33 @@ arsExplorerServer <- function(id, adam_reactive) {
 
     # ── Output: rendered gt table (Table tab) ────────────────────────────────
     output$rendered_gt <- gt::render_gt({
+      req(table_result())
+      table_result()
+    })
+
+    # ── Outputs: Compare tab — mock (left) and rendered (right) ──────────────
+    output$compare_mock <- gt::render_gt({
+      sh <- shell_obj()
+      req(sh)
+      tryCatch(render_mock(sh), error = function(e) NULL)
+    })
+
+    output$compare_rendered_ui <- renderUI({
+      tbl <- table_result()
+      if (is.null(tbl)) {
+        div(
+          class = "d-flex flex-column align-items-center justify-content-center h-100 text-muted",
+          style = "min-height: 200px;",
+          icon("arrow-left", class = "fa-2x mb-3"),
+          p("Configure and click ", strong("Get ARD"), " then ", strong("Get Table"),
+            " to see the results here.")
+        )
+      } else {
+        gt::gt_output(ns("compare_rendered"))
+      }
+    })
+
+    output$compare_rendered <- gt::render_gt({
       req(table_result())
       table_result()
     })
