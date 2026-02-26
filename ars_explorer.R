@@ -156,6 +156,27 @@ arsExplorerUI <- function(id) {
             "Arm values are auto-detected from the data.",
             "Edit display labels as needed."),
           uiOutput(ns("group_map_ui"))
+        ),
+
+        accordion_panel(
+          title = "Value map",
+          value = "vmap_overrides",
+          p(class = "text-muted small mb-2",
+            "Map values that differ between the shell template and your dataset.",
+            tags$br(),
+            tags$em("Example: shell expects \u201cRELATED\u201d but data has \u201cREMOTE\u201d.")),
+          # Column headers
+          fluidRow(
+            class = "mb-1 gx-1",
+            column(4, tags$small(strong("Variable"))),
+            column(4, tags$small(strong("Template value"))),
+            column(3, tags$small(strong("Dataset value"))),
+            column(1)
+          ),
+          uiOutput(ns("ovm_rows_ui")),
+          actionButton(ns("add_ovm_row"), "+ Add",
+                       icon  = icon("plus"),
+                       class = "btn-sm btn-outline-primary mt-2 w-100")
         )
       ),
 
@@ -432,6 +453,104 @@ arsExplorerServer <- function(id, adam_reactive) {
       result
     })
 
+    # ── State: value-map override rows ────────────────────────────────────────
+    # Each row is identified by a unique integer id.  The actual text inputs
+    # (ovm_var_<id>, ovm_shell_<id>, ovm_data_<id>) live in Shiny's input list;
+    # ovm_rows() just tracks which ids currently exist.
+    ovm_counter <- reactiveVal(0L)
+    ovm_rows    <- reactiveVal(integer(0))   # vector of active row ids
+
+    # Add a new blank row
+    observeEvent(input$add_ovm_row, {
+      new_id <- ovm_counter() + 1L
+      ovm_counter(new_id)
+      ovm_rows(c(ovm_rows(), new_id))
+    })
+
+    # Delete-button observers — one per row, fires once then becomes inert
+    observe({
+      lapply(ovm_rows(), function(id) {
+        btn <- paste0("del_ovm_", id)
+        observeEvent(input[[btn]], {
+          ovm_rows(setdiff(ovm_rows(), id))
+        }, ignoreInit = TRUE, once = TRUE)
+      })
+    })
+
+    # ── Render: value-map row editor ──────────────────────────────────────────
+    output$ovm_rows_ui <- renderUI({
+      ids  <- ovm_rows()
+      vars <- c("" , shell_vars())    # variable choices: blank + shell vars
+
+      if (length(ids) == 0) {
+        return(p(class = "text-muted small fst-italic", "No overrides defined."))
+      }
+
+      lapply(ids, function(id) {
+        fluidRow(
+          class = "mb-1 gx-1 align-items-center",
+          column(4,
+            selectInput(
+              inputId  = ns(paste0("ovm_var_", id)),
+              label    = NULL,
+              choices  = vars,
+              selected = isolate(input[[paste0("ovm_var_", id)]]) %||% "",
+              width    = "100%"
+            )
+          ),
+          column(4,
+            textInput(
+              inputId     = ns(paste0("ovm_shell_", id)),
+              label       = NULL,
+              value       = isolate(input[[paste0("ovm_shell_", id)]]) %||% "",
+              placeholder = "e.g. RELATED",
+              width       = "100%"
+            )
+          ),
+          column(3,
+            textInput(
+              inputId     = ns(paste0("ovm_data_", id)),
+              label       = NULL,
+              value       = isolate(input[[paste0("ovm_data_", id)]]) %||% "",
+              placeholder = "e.g. REMOTE",
+              width       = "100%"
+            )
+          ),
+          column(1,
+            actionButton(
+              inputId = ns(paste0("del_ovm_", id)),
+              label   = NULL,
+              icon    = icon("xmark"),
+              class   = "btn-sm btn-outline-danger px-1 w-100"
+            )
+          )
+        )
+      })
+    })
+
+    # ── Reactive: constructed value_map ───────────────────────────────────────
+    value_map <- reactive({
+      ids <- ovm_rows()
+      if (length(ids) == 0) return(NULL)
+
+      result <- list()
+      for (id in ids) {
+        var_name  <- input[[paste0("ovm_var_",   id)]]
+        shell_val <- input[[paste0("ovm_shell_", id)]]
+        data_val  <- input[[paste0("ovm_data_",  id)]]
+
+        # Skip incomplete rows
+        if (is.null(var_name)  || !nzchar(var_name))  next
+        if (is.null(shell_val) || !nzchar(shell_val)) next
+        if (is.null(data_val)  || !nzchar(data_val))  next
+
+        existing <- result[[var_name]]
+        result[[var_name]] <- c(existing, setNames(data_val, shell_val))
+      }
+
+      if (length(result) == 0) NULL else result
+    })
+
     # ── Reactive: adam datasets subset needed for this shell ──────────────────
     adam_for_shell <- reactive({
       m    <- selected_meta()
@@ -466,10 +585,12 @@ arsExplorerServer <- function(id, adam_reactive) {
     ard_result   <- reactiveVal(NULL)
     table_result <- reactiveVal(NULL)
 
-    # Reset results whenever shell / domain changes
+    # Reset results and value-map rows whenever shell / domain changes
     observe({
       ard_result(NULL)
       table_result(NULL)
+      ovm_rows(integer(0))
+      ovm_counter(0L)
     }) |> bindEvent(input$shell_id, input$domain, ignoreInit = TRUE)
 
     # ── Render: "Get Table" button — only enabled when ARD is ready ───────────
@@ -497,6 +618,7 @@ arsExplorerServer <- function(id, adam_reactive) {
               shell_obj(),
               variable_map = variable_map(),
               group_map    = group_map(),
+              value_map    = value_map(),
               adam         = adam_for_shell()
             )
             run(sh_hydrated, adam = adam_for_shell())
