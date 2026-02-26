@@ -110,11 +110,20 @@ if (!patched) {
 }
 
 # ── Step 3: renv::restore() ──────────────────────────────────────────────────
+#
+# Explicitly exclude the five local sub-packages so renv does not try to
+# fetch them from CRAN. "unknown" source in renv.lock does not prevent
+# renv from attempting a CRAN download; the only reliable way to skip them
+# is to pass the packages argument.
 
 message("\n── Step 3: Restoring CRAN packages via renv ────────────────────────────")
-message("  (The five local packages are skipped here; installed in Step 4.)\n")
+message("  (The five local packages are excluded here; installed in Step 4.)\n")
 
-renv::restore(prompt = FALSE)
+local_pkgs <- c("ars", "arscore", "arsshells", "arsresult", "arstlf")
+lock        <- renv::lockfile_read(file = lock_path)
+cran_pkgs   <- setdiff(names(lock$Packages), local_pkgs)
+
+renv::restore(packages = cran_pkgs, prompt = FALSE)
 
 # ── Step 4: Install local packages in dependency order ───────────────────────
 #
