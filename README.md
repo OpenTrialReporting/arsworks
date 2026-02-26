@@ -11,24 +11,52 @@ This repository does not contain package source code itself. It holds:
 - An `renv.lock` capturing the full R package environment
 - Design documents and cross-package planning files
 
-**Reproduce the full environment on a new machine:**
+---
+
+## Quick start
+
+### 1. Clone the repository
 
 ```bash
-git clone --recurse-submodules https://github.com/OpenTrialReporting/arsworks.git
+git clone https://github.com/OpenTrialReporting/arsworks.git
 cd arsworks
 ```
 
-Then open `arsworks.Rproj` in RStudio and run:
+> Submodules do **not** need to be cloned manually. The bootstrap script in
+> Step 2 handles submodule initialisation automatically, even if you forgot
+> `--recurse-submodules`.
+
+### 2. Open and bootstrap
+
+Open `arsworks.Rproj` in RStudio. renv activates automatically via `.Rprofile`.
+Then run the one-shot bootstrap script:
 
 ```r
-renv::restore()        # install all dependencies — say Y to the "unknown source" prompt
-source("sync_and_load.R")  # document + load all five packages into your session
+source("bootstrap.R")
 ```
 
-> **Why `sync_and_load.R` instead of `library()`?** The five sub-packages are loaded
-> from local source (via `devtools::load_all()`), not from an installed library. The
-> script also runs `devtools::document()` first to regenerate `NAMESPACE` files, which
-> are not tracked in the repos and must be built locally on every fresh clone.
+This script does four things in order:
+
+| Step | What it does |
+|------|--------------|
+| 1 | Initialises git submodules (`git submodule update --init --recursive`) |
+| 2 | Patches `renv.lock` so the local `ars` package is not fetched from CRAN¹ |
+| 3 | Runs `renv::restore()` to install all pinned CRAN dependencies |
+| 4 | Installs the five local sub-packages in dependency order |
+
+> ¹ An unrelated package on CRAN is also named `ars`. Without the patch,
+> `renv::restore()` tries to download it and fails on a version mismatch.
+> The bootstrap fixes this automatically.
+
+### 3. Start working
+
+```r
+source("sync_and_load.R")      # document + load all five packages
+source("data_table_examples.R") # creates adsl, adae, adlb in your session
+```
+
+Run `source("sync_and_load.R")` at the start of every session, or after
+pulling changes to any sub-package.
 
 ---
 
@@ -140,69 +168,42 @@ browse_shells()
 
 ---
 
-## Getting started (new contributors)
+## Troubleshooting
 
-### 1. Clone the repo with all submodules
+### Submodule directories are empty after cloning
 
-```bash
-git clone --recurse-submodules https://github.com/OpenTrialReporting/arsworks.git
-cd arsworks
-```
-
-If you already cloned without `--recurse-submodules`, initialise them now:
+Run the bootstrap script — it calls `git submodule update --init --recursive`
+automatically. If bootstrap itself fails at the submodule step, run the git
+command directly and check for network or proxy errors:
 
 ```bash
 git submodule update --init --recursive
 ```
 
-### 2. Restore the R package environment
+If you are behind a corporate proxy, configure git first:
 
-Open the project in RStudio by double-clicking `arsworks.Rproj`. renv will
-activate automatically via `.Rprofile`. Then restore the pinned packages:
-
-```r
-renv::restore()
+```bash
+git config --global http.proxy http://proxy.example.com:8080
 ```
 
-> **Expected prompt:** renv will warn that `arscore`, `arsresult`, `arsshells`,
-> and `arstlf` are from an "unknown source" (they are local submodules, not on
-> CRAN). **Enter `Y` to proceed.** This is expected behaviour.
+### `renv::restore()` fails with "failed to retrieve package 'ars@0.1.0'"
 
-### 3. Load the arsworks packages
+This means `renv.lock` still has `ars` listed as `"Source": "Repository"`.
+Re-run the bootstrap script — it patches this automatically. Or fix it manually
+by opening `renv.lock`, finding the `"ars"` block, and changing
+`"Source": "Repository"` to `"Source": "unknown"`.
 
-The five sub-packages are loaded from local source, not from an installed
-library. The `sync_and_load.R` script handles this in one step: it runs
-`devtools::document()` (to regenerate `NAMESPACE` files, which are not tracked
-in the repos) and then `devtools::load_all()` for each package in dependency
-order.
+### A sub-package fails to install with "dependencies not available"
 
-```r
-source("sync_and_load.R")
-```
-
-Run this at the start of every session, or whenever you pull new changes to a
-sub-package.
-
-### 4. Verify
+The five packages must be installed in dependency order. The bootstrap script
+handles this. If you are installing manually, use this order:
 
 ```r
-source("data_table_examples.R")  # creates adsl, adae, adlb
-
-use_shell("T-AE-02") |>
-  hydrate(
-    variable_map = c(TRT01A = "TRT01A", SAFFL = "SAFFL",
-                     TRTEMFL = "TRTEMFL",
-                     AEBODSYS = "AEBODSYS", AEDECOD = "AEDECOD"),
-    group_map = list(
-      GRP_TRT = list(
-        list(id = "GRP_TRT_A", value = "Placebo",              order = 1L),
-        list(id = "GRP_TRT_B", value = "Xanomeline Low Dose",  order = 2L),
-        list(id = "GRP_TRT_C", value = "Xanomeline High Dose", order = 3L)
-      )
-    )
-  ) |>
-  run(adam = list(ADAE = adae, ADSL = adsl)) |>
-  render(backend = "tfrmt")
+devtools::install("arscore")
+devtools::install("arsshells")
+devtools::install("arsresult")
+devtools::install("arstlf")
+devtools::install("ars")
 ```
 
 ---
@@ -254,9 +255,11 @@ arsworks/
 ├── renv.lock             ← pinned R package environment
 ├── renv/                 ← renv activation scripts
 ├── arsworks.Rproj        ← RStudio project file
+├── bootstrap.R           ← one-shot setup script (run once after cloning)
+├── sync_and_load.R       ← session loader (run at the start of each session)
+├── data_table_examples.R ← test data generator
 ├── MASTER_PLAN.md
-├── MAKE_TEST_DATA.md
-└── data_table_examples.R
+└── MAKE_TEST_DATA.md
 ```
 
 ---

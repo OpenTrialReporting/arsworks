@@ -164,7 +164,7 @@
     "ars": {
       "Package": "ars",
       "Version": "0.1.0",
-      "Source": "Repository",
+      "Source": "unknown",
       "Type": "Package",
       "Title": "Pipe-Friendly Workflow API for the CDISC Analysis Results Standard",
       "Authors@R": "person( \"Lovemore\", \"Gakava\", email   = \"Lovemore.Gakava@gmail.com\", role    = c(\"aut\", \"cre\") )",
