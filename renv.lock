@@ -164,7 +164,7 @@
     "ars": {
       "Package": "ars",
       "Version": "0.1.0",
-      "Source": "unknown",
+      "Source": "Repository",
       "Type": "Package",
       "Title": "Pipe-Friendly Workflow API for the CDISC Analysis Results Standard",
       "Authors@R": "person( \"Lovemore\", \"Gakava\", email   = \"Lovemore.Gakava@gmail.com\", role    = c(\"aut\", \"cre\") )",
@@ -181,6 +181,7 @@
         "arsshells",
         "arsresult",
         "arstlf",
+        "S7 (>= 0.1.0)",
         "cli",
         "glue",
         "rlang (>= 1.0.0)"
@@ -189,6 +190,10 @@
         "testthat (>= 3.0.0)",
         "withr",
         "dplyr",
+        "tibble",
+        "jsonlite",
+        "tfrmt",
+        "devtools",
         "knitr",
         "rmarkdown",
         "gt"
@@ -249,7 +254,7 @@
       "Title": "Execution Engine for CDISC ARS — WhereClause Transpiler and Method Registry",
       "Authors@R": "c( person('Lovemore', 'Gakava', email = 'Lovemore.Gakava@gmail.com', role = c('aut', 'cre')) )",
       "Description": "Bridges CDISC ARS v1.0 metadata (arscore) to executable R computation. Provides a WhereClause transpiler that converts ars_where_clause / ars_compound_*_expression metadata into rlang quoted expressions evaluated via dplyr generics, making it backend-agnostic across data.frame, Arrow, and DuckDB. Also provides an extensible Method Registry that maps ars_method IDs to concrete R functions, and an execution pipeline that combines both to produce validated ARD tibbles from ADaM data.",
-      "License": "MIT",
+      "License": "MIT + file LICENSE",
       "Encoding": "UTF-8",
       "Roxygen": "list(markdown = TRUE)",
       "RoxygenNote": "7.3.3",
@@ -265,6 +270,7 @@
       ],
       "Suggests": [
         "testthat (>= 3.0.0)",
+        "devtools",
         "knitr",
         "rmarkdown"
       ],
@@ -305,7 +311,7 @@
         "rmarkdown"
       ],
       "VignetteBuilder": "knitr",
-      "Collate": "'arsshells-package.R' 'shell_cell.R' 'shell_section.R' 'shell.R' 'validate_shell.R' 'use_shell.R' 'browse_shells.R' 'hydrate.R'",
+      "Collate": "'arsshells-package.R' 'shell_cell.R' 'shell_section.R' 'shell.R' 'validate_shell.R' 'use_shell.R' 'browse_shells.R' 'build_value_map.R' 'hydrate.R' 'hydrate_helpers.R'",
       "URL": "https://github.com/OpenTrialReporting/arsshells, https://opentrialreporting.github.io/arsshells/",
       "BugReports": "https://github.com/OpenTrialReporting/arsshells/issues",
       "NeedsCompilation": "no",
@@ -320,7 +326,7 @@
       "Title": "Translator from CDISC ARS Metadata to Publication TLFs",
       "Authors@R": "c( person('Lovemore', 'Gakava', email = 'Lovemore.Gakava@gmail.com', role = c('aut', 'cre')) )",
       "Description": "Translates CDISC ARS v1.0 display metadata and Analysis Results Data (ARD) into publication-ready tables, listings, and figures via established R backends. Phase 1 targets the tfrmt package (ARD-native clinical table framework). Consumes arscore reporting events and arsshells display geometry to assemble tfrmt objects, then delegates final rendering to tfrmt's gt backend.",
-      "License": "MIT",
+      "License": "MIT + file LICENSE",
       "Encoding": "UTF-8",
       "Roxygen": "list(markdown = TRUE)",
       "RoxygenNote": "7.3.3",
@@ -328,21 +334,23 @@
         "R (>= 4.1.0)"
       ],
       "Imports": [
-        "arscore",
-        "arsshells",
         "tfrmt (>= 0.3.0)",
         "dplyr (>= 1.1.0)",
         "tidyr",
+        "tibble",
         "rlang (>= 1.0.0)",
         "cli",
         "glue"
       ],
       "Suggests": [
         "testthat (>= 3.0.0)",
+        "arscore",
+        "arsshells",
         "arsresult",
         "gt",
         "knitr",
-        "rmarkdown"
+        "rmarkdown",
+        "devtools"
       ],
       "VignetteBuilder": "knitr",
       "Collate": "'arstlf-package.R' 'prep_ard.R' 'render_tfrmt.R' 'render.R'",
@@ -440,7 +448,8 @@
       "NeedsCompilation": "yes",
       "Author": "Steve Dutky [aut] (S original; then (after MM's port) revised and modified), Martin Maechler [cre, aut] (Initial R port; tweaks, <https://orcid.org/0000-0002-8685-9910>)",
       "Maintainer": "Martin Maechler <maechler@stat.math.ethz.ch>",
-      "Repository": "CRAN"
+      "Repository": "RSPM",
+      "Encoding": "UTF-8"
     },
     "brew": {
       "Package": "brew",
@@ -2086,6 +2095,37 @@
       "Author": "Jeroen Ooms [aut, cre] (<https://orcid.org/0000-0002-4035-0289>), Duncan Temple Lang [ctb], Lloyd Hilaiel [cph] (author of bundled libyajl)",
       "Repository": "CRAN"
     },
+    "jsonvalidate": {
+      "Package": "jsonvalidate",
+      "Version": "1.5.0",
+      "Source": "Repository",
+      "Title": "Validate 'JSON' Schema",
+      "Authors@R": "c(person(\"Rich\", \"FitzJohn\", role = c(\"aut\", \"cre\"), email = \"rich.fitzjohn@gmail.com\"), person(\"Rob\", \"Ashton\", role = \"aut\"), person(\"Alex\", \"Hill\", role = \"ctb\"), person(\"Alicia\", \"Schep\", role = \"ctb\"), person(\"Ian\", \"Lyttle\", role = \"ctb\"), person(\"Kara\", \"Woo\", role = \"ctb\"), person(\"Mathias\", \"Buus\", role = c(\"aut\", \"cph\"), comment = \"Author of bundled imjv library\"), person(\"Evgeny\", \"Poberezkin\", role = c(\"aut\", \"cph\"), comment = \"Author of bundled Ajv library\"))",
+      "Maintainer": "Rich FitzJohn <rich.fitzjohn@gmail.com>",
+      "Description": "Uses the node library 'is-my-json-valid' or 'ajv' to validate 'JSON' against a 'JSON' schema.  Drafts 04, 06 and 07 of 'JSON' schema are supported.",
+      "License": "MIT + file LICENSE",
+      "URL": "https://docs.ropensci.org/jsonvalidate/, https://github.com/ropensci/jsonvalidate",
+      "BugReports": "https://github.com/ropensci/jsonvalidate/issues",
+      "Imports": [
+        "R6",
+        "V8"
+      ],
+      "Suggests": [
+        "knitr",
+        "jsonlite",
+        "rmarkdown",
+        "testthat",
+        "withr"
+      ],
+      "RoxygenNote": "7.3.2",
+      "VignetteBuilder": "knitr",
+      "Encoding": "UTF-8",
+      "Language": "en-GB",
+      "Config/testthat/edition": "3",
+      "NeedsCompilation": "no",
+      "Author": "Rich FitzJohn [aut, cre], Rob Ashton [aut], Alex Hill [ctb], Alicia Schep [ctb], Ian Lyttle [ctb], Kara Woo [ctb], Mathias Buus [aut, cph] (Author of bundled imjv library), Evgeny Poberezkin [aut, cph] (Author of bundled Ajv library)",
+      "Repository": "CRAN"
+    },
     "juicyjuice": {
       "Package": "juicyjuice",
       "Version": "0.1.0",
@@ -2511,6 +2551,55 @@
       "NeedsCompilation": "no",
       "Author": "Gábor Csárdi [aut, cre]",
       "Maintainer": "Gábor Csárdi <csardi.gabor@gmail.com>",
+      "Repository": "CRAN"
+    },
+    "pharmaverseadam": {
+      "Package": "pharmaverseadam",
+      "Version": "1.3.0",
+      "Source": "Repository",
+      "Type": "Package",
+      "Title": "ADaM Test Data for the 'Pharmaverse' Family of Packages",
+      "Authors@R": "c( person(\"Fanny\", \"Gautier\", , \"fanny.gautier@cytel.com\", role = c(\"aut\", \"cre\"), comment = c(ORCID = \"0009-0004-3581-0131\")), person(\"Stefan\", \"Bundfuss\", role = \"aut\", comment = c(ORCID = \"0009-0005-0027-1198\")), person(\"Edoardo\", \"Mancini\", , \"edoardo.mancini@roche.com\", role = \"aut\", comment = c(ORCID = \"0009-0006-4899-8641\")), person(\"Lina\", \"Patil\", , \"lina.patil@cytel.com\", role = \"aut\"), person(\"Gerardo Jose\", \"Rodriguez\", , \"gerardo.jrac@gmail.com\", role = \"aut\", comment = c(ORCID = \"0000-0003-1413-0060\")), person(\"Vladyslav\", \"Shuliar\", role = \"aut\", comment = c(ORCID = \"0009-0008-2354-8999\")), person(\"Cytel Inc.\", role = c(\"cph\", \"fnd\")), person(\"F. Hoffmann-La Roche AG\", role = c(\"cph\", \"fnd\")), person(\"GlaxoSmithKline LLC\", role = c(\"cph\", \"fnd\")) )",
+      "Description": "A set of Analysis Data Model (ADaM) datasets constructed using the Study Data Tabulation Model (SDTM) datasets contained in the 'pharmaversesdtm' package and the template scripts from the 'admiral' family of packages. ADaM dataset specifications are described in the CDISC ADaM implementation guide, accessible by creating a free account on <https://www.cdisc.org/>.",
+      "License": "Apache License (>= 2)",
+      "URL": "https://pharmaverse.github.io/pharmaverseadam/, https://github.com/pharmaverse/pharmaverseadam/",
+      "Depends": [
+        "R (>= 3.5)"
+      ],
+      "Imports": [
+        "tibble"
+      ],
+      "Suggests": [
+        "admiraldev (>= 1.4.0)",
+        "cli",
+        "covr",
+        "devtools",
+        "diffdf",
+        "DT",
+        "jsonlite",
+        "knitr",
+        "lintr",
+        "metacore",
+        "metatools",
+        "methods",
+        "miniUI",
+        "pkgdown",
+        "readxl",
+        "rmarkdown",
+        "roxygen2",
+        "spelling",
+        "testthat (>= 3.0.0)",
+        "usethis"
+      ],
+      "Config/testthat/edition": "3",
+      "Encoding": "UTF-8",
+      "Language": "en-US",
+      "LazyData": "true",
+      "LazyDataCompression": "bzip2",
+      "RoxygenNote": "7.3.3",
+      "NeedsCompilation": "no",
+      "Author": "Fanny Gautier [aut, cre] (ORCID: <https://orcid.org/0009-0004-3581-0131>), Stefan Bundfuss [aut] (ORCID: <https://orcid.org/0009-0005-0027-1198>), Edoardo Mancini [aut] (ORCID: <https://orcid.org/0009-0006-4899-8641>), Lina Patil [aut], Gerardo Jose Rodriguez [aut] (ORCID: <https://orcid.org/0000-0003-1413-0060>), Vladyslav Shuliar [aut] (ORCID: <https://orcid.org/0009-0008-2354-8999>), Cytel Inc. [cph, fnd], F. Hoffmann-La Roche AG [cph, fnd], GlaxoSmithKline LLC [cph, fnd]",
+      "Maintainer": "Fanny Gautier <fanny.gautier@cytel.com>",
       "Repository": "CRAN"
     },
     "pillar": {

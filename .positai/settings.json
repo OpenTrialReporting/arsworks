@@ -1,0 +1,12 @@
+{
+  "permission": {
+    "executeCode": {
+      "*": "allow"
+    },
+    "bash": {
+      "find *": "allow",
+      "sort *": "allow",
+      "python *": "allow"
+    }
+  }
+}

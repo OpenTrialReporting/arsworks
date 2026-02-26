@@ -993,7 +993,95 @@ RACE rows, and the custom title.
 
 ---
 
-## 19. Backlog (Post Phase A/B/C)
+## 19. ARS Explorer — App Architecture
+
+`ars_explorer.R` is a self-contained Shiny module (`arsExplorerUI` / `arsExplorerServer`) that exposes the full pipeline interactively.
+
+### 19.1 Execution pipeline
+
+```
+use_shell(id)
+    ↓
+hydrate(shell, variable_map, group_map, value_map, adam)   ← all user inputs
+    ↓
+ars::run(hydrated_shell, adam)                              ← returns ArsResult
+    ↓
+ard_result() reactiveVal                                    ← stores ArsResult
+    ↓
+render(ard_result(), backend = "tfrmt")                    ← gt table
+```
+
+`ars::run()` receives a `Shell` object, not a bare `ars_reporting_event`.  It dispatches using `S7::S7_inherits(re, arsshells::Shell)` — **not** `inherits()`, which is S3-only and returns `FALSE` for S7 objects.  On match, it extracts `shell@reporting_event`, calls `arsresult::run()`, and wraps the result in an `ArsResult` bundle `list(ard = ..., shell = ...)`.
+
+### 19.2 Validation pipeline (Validate button)
+
+Three independent layers; each layer's result is stored in `validate_result()`.
+
+| Layer | What it checks | Tool |
+|-------|----------------|------|
+| **1 — Referential integrity** | All IDs in results resolve; no orphan operation_ids | `arscore::validate_reporting_event()` on re-embedded RE |
+| **2 — CDISC JSON Schema** | Serialised JSON matches the official ARS v1.0 Draft-07 schema | `jsonvalidate::json_validate()` with AJV engine |
+| **3 — JSON round-trip** | `to_json → from_json → validate` produces a valid RE | `arscore::reporting_event_to_json()` + `json_to_reporting_event()` |
+
+Layer 1 is prerequisite for Layers 2 and 3; both are skipped if Layer 1 fails.
+
+### 19.3 Re-embedding ARD into the reporting event (Layer 1)
+
+`.embed_ard_into_re(re, ard)` writes ARD rows back into `re@analyses[*]@results` as `ars_operation_result` objects.
+
+**Critical filter:** `arsresult::run()` appends *component scalar* rows to the ARD beyond the method's declared operations (see §19.4).  These extra rows must be stripped before embedding or `validate_reporting_event()` will reject them.  `.embed_ard_into_re()` pre-filters the ARD to formal operation IDs only:
+
+```r
+# For each analysis, keep only rows whose operation_id is declared in the method
+formal_ops <- list()
+for (an in re@analyses) {
+  mt <- methods_by_id[[an@method_id]]
+  if (!is.null(mt))
+    formal_ops[[an@id]] <- vapply(mt@operations, \(op) op@id, character(1L))
+}
+ard <- ard[keep_rows_matching_formal_ops, ]
+```
+
+### 19.4 Component scalars in the ARD
+
+`METH_CONT::OP_MEAN_SD` returns a named numeric vector with three elements: `OP_MEAN`, `OP_SD`, `OP_MEAN_SD`.  `METH_CONT::OP_RANGE` returns `OP_MIN`, `OP_MAX`, `OP_RANGE`.  The extra scalars (OP_MEAN, OP_SD, OP_MIN, OP_MAX) are appended to `analysis@results` — and therefore appear in the ARD — because `arstlf`'s `frmt_combine()` needs the individual values to build composite formatted cells.
+
+**Two consumers, two views of the ARD:**
+
+| Consumer | Needs component scalars? | Reason |
+|----------|--------------------------|--------|
+| `arstlf::render()` | **Yes** | `frmt_combine()` reads OP_MEAN and OP_SD separately to format "xx.x (xx.x)" |
+| `.embed_ard_into_re()` | **No** | Validation requires operation_ids to match the method's declared operations |
+
+The ARD is therefore not a simple 1-to-1 mirror of the method operations; it is a superset.  Any code that re-embeds results must filter to the formal operation list.
+
+### 19.5 `strip_ars_extensions()` — what is stripped for Layer 2
+
+The CDISC ARS JSON Schema uses `additionalProperties: false`.  arscore adds fields beyond the v1 model.  `.strip_ars_extensions()` removes or normalises them before schema validation:
+
+| Extension | Location | Treatment |
+|-----------|----------|-----------|
+| `isTotal` | Every `group` in `analysisGroupings` | Field removed (`NULL`) |
+| `groupId` | Every `orderedGrouping` in `analyses` | Field removed (`NULL`) |
+| `IS_NULL` / `NOT_NULL` comparator | Any `condition` anywhere in the tree | Replaced with `EQ ""`  / `NE ""` (see §ISSUES_AND_GAPS) |
+
+The normalisation is applied to the JSON **copy used for schema validation only**.  The actual `ArsResult` and all Layer 1/3 checks use the unmodified arscore objects.
+
+### 19.6 ANSI colour codes in Shiny notifications
+
+`cli` error and warning messages contain ANSI escape sequences (e.g. `\033[38;5;232m`).  Shiny renders these as raw text in `showNotification()` and `tags$pre()`.
+
+All notification and card message sites in `ars_explorer.R` wrap `conditionMessage()` with `.strip_ansi()`:
+
+```r
+.strip_ansi <- function(x) cli::ansi_strip(x)
+```
+
+Applied to: `showNotification` (5 call sites) and `tags$pre` in the validation layer cards (2 sites).
+
+---
+
+## 20. Backlog (Post Phase A/B/C)
 
 Items carried forward from per-package planning files. Not in scope for the
 current rework but must not be lost. Grouped by package.

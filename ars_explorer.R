@@ -17,6 +17,9 @@ library(reactable)
 library(jsonlite)
 library(ars)
 
+# ── Helper: strip ANSI colour codes from cli error/warning messages ──────────
+.strip_ansi <- function(x) cli::ansi_strip(x)
+
 # ── Helper: load shell index from arsshells ───────────────────────────────────
 
 .load_shell_index <- function() {
@@ -112,6 +115,107 @@ library(ars)
   Filter(function(gf) !isTRUE(gf@data_driven), shell@reporting_event@analysis_groupings)
 }
 
+# ── Helper: strip arscore extensions before CDISC JSON Schema validation ──────
+#
+# The official CDISC ARS JSON Schema uses `additionalProperties: false` on every
+# class definition.  arscore adds two fields beyond the CDISC model:
+#
+#   • `isTotal` on Group objects   — marks Total/All-subjects groups
+#   • `groupId` on OrderedGroupingFactor — pre-resolves the active group for
+#                                          analyses that fix a single group value
+#
+# These fields are useful for arscore's internal logic and round-trips, but they
+# cause schema validation failures.  This function strips them from the parsed
+# JSON list before passing the document to jsonvalidate.  The arscore JSON
+# representation is otherwise a strict superset of the CDISC schema.
+
+.strip_ars_extensions <- function(doc) {
+  # Strip isTotal from every group in every analysisGrouping
+  if (!is.null(doc$analysisGroupings)) {
+    doc$analysisGroupings <- lapply(doc$analysisGroupings, function(gf) {
+      if (!is.null(gf$groups)) {
+        gf$groups <- lapply(gf$groups, function(g) {
+          g$isTotal <- NULL
+          g
+        })
+      }
+      gf
+    })
+  }
+
+  # Strip groupId from every orderedGrouping in every analysis
+  if (!is.null(doc$analyses)) {
+    doc$analyses <- lapply(doc$analyses, function(an) {
+      if (!is.null(an$orderedGroupings)) {
+        an$orderedGroupings <- lapply(an$orderedGroupings, function(og) {
+          og$groupId <- NULL
+          og
+        })
+      }
+      an
+    })
+  }
+
+  # Normalise arscore-only comparators (IS_NULL, NOT_NULL) to CDISC-valid ones.
+  # The CDISC v1 ConditionComparatorEnum only includes EQ/NE/GT/GE/LT/LE/IN/NOTIN.
+  # IS_NULL → EQ "" and NOT_NULL → NE "" so the structure stays valid for schema
+  # purposes (the actual semantics are preserved in Layer 1 / round-trip checks).
+  .fix_comparators <- function(obj) {
+    if (!is.list(obj)) return(obj)
+    if (!is.null(obj$comparator)) {
+      if (obj$comparator == "IS_NULL") {
+        obj$comparator <- "EQ"
+        obj$value      <- list("")
+      } else if (obj$comparator == "NOT_NULL") {
+        obj$comparator <- "NE"
+        obj$value      <- list("")
+      }
+    }
+    lapply(obj, .fix_comparators)
+  }
+  doc <- .fix_comparators(doc)
+
+  doc
+}
+
+# ── Helper: auto-generate a mainListOfContents from a reporting event ─────────
+#
+# The CDISC ARS JSON Schema (draft-07) requires `mainListOfContents` at the
+# root of every ReportingEvent.  Our shell templates leave it NULL (the field
+# is optional in arscore), so Layer-2 schema validation currently fails.
+#
+# This helper builds a flat, auto-generated ListOfContents that enumerates
+# every analysis in the reporting event in declared order.  It is called:
+#   1. Before Layer-2 schema validation (Validate button).
+#   2. Before the "Full ARS with results" JSON download.
+#
+# The generated LoC carries a label that makes its auto-generated nature clear
+# so it won't be confused with a curated study-level table of contents.
+
+.auto_main_loc <- function(re) {
+  analyses <- re@analyses
+  if (length(analyses) == 0L) return(re)
+
+  list_items <- lapply(seq_along(analyses), function(i) {
+    an <- analyses[[i]]
+    arscore::new_ars_ordered_list_item(
+      name        = if (!is.na(an@label) && nzchar(an@label)) an@label else an@id,
+      level       = 1L,
+      order       = as.integer(i),
+      analysis_id = an@id
+    )
+  })
+
+  loc <- arscore::new_ars_list_of_contents(
+    name          = "Main List of Contents",
+    label         = "Auto-generated from analyses list",
+    contents_list = arscore::new_ars_nested_list(list_items = list_items)
+  )
+
+  re@main_list_of_contents <- loc
+  re
+}
+
 # ── Helper: embed ARD results into a reporting event (ARS model) ──────────────
 #
 # create_ard() flattens the analysis@results tree into a tidy tibble.
@@ -154,6 +258,23 @@ library(ars)
 }
 
 .embed_ard_into_re <- function(re, ard) {
+  # Build lookup: analysis_id → formal operation IDs (from method definition).
+  # run() appends component scalars (e.g. OP_MEAN, OP_SD from OP_MEAN_SD) that
+  # are not declared in the method; strip those before embedding so that
+  # validate_reporting_event() does not fail on unknown operation_ids.
+  methods_by_id <- setNames(re@methods, vapply(re@methods, \(m) m@id, character(1L)))
+  formal_ops <- list()
+  for (an in re@analyses) {
+    mt <- methods_by_id[[an@method_id]]
+    if (!is.null(mt))
+      formal_ops[[an@id]] <- vapply(mt@operations, \(op) op@id, character(1L))
+  }
+  keep <- vapply(seq_len(nrow(ard)), function(i) {
+    fml <- formal_ops[[ard$analysis_id[[i]]]]
+    is.null(fml) || ard$operation_id[[i]] %in% fml
+  }, logical(1L))
+  ard <- ard[keep, ]
+
   # Build lookup: analysis_id → list of ars_operation_result
   an_results <- list()
 
@@ -262,6 +383,7 @@ arsExplorerUI <- function(id) {
       actionButton(ns("run_ard"), "Get ARD", icon = icon("flask"),
                    class = "btn-primary w-100 mb-2"),
       uiOutput(ns("get_table_btn")),
+      uiOutput(ns("validate_btn")),
 
       hr(class = "my-2"),
       uiOutput(ns("run_status")),
@@ -287,6 +409,12 @@ arsExplorerUI <- function(id) {
         icon  = icon("table"),
         uiOutput(ns("download_bar")),
         gt::gt_output(ns("rendered_gt"))
+      ),
+
+      nav_panel(
+        title = "Validate",
+        icon  = icon("shield-check"),
+        uiOutput(ns("validate_report"))
       ),
 
       nav_panel(
@@ -379,7 +507,7 @@ arsExplorerServer <- function(id, adam_reactive) {
       tryCatch(
         use_shell(input$shell_id),
         error = function(e) {
-          showNotification(paste("Failed to load shell:", conditionMessage(e)),
+          showNotification(paste("Failed to load shell:", .strip_ansi(conditionMessage(e))),
                            type = "error", duration = 8)
           NULL
         }
@@ -677,21 +805,23 @@ arsExplorerServer <- function(id, adam_reactive) {
       tryCatch(
         render_mock(sh),
         error = function(e) {
-          showNotification(paste("Mock render failed:", conditionMessage(e)),
+          showNotification(paste("Mock render failed:", .strip_ansi(conditionMessage(e))),
                            type = "warning", duration = 6)
           NULL
         }
       )
     })
 
-    # ── State: ARD and table results ──────────────────────────────────────────
-    ard_result   <- reactiveVal(NULL)
-    table_result <- reactiveVal(NULL)
+    # ── State: ARD, table, and validation results ──────────────────────────────
+    ard_result      <- reactiveVal(NULL)
+    table_result    <- reactiveVal(NULL)
+    validate_result <- reactiveVal(NULL)
 
     # Reset results and value-map rows whenever shell / domain changes
     observe({
       ard_result(NULL)
       table_result(NULL)
+      validate_result(NULL)
       ovm_rows(integer(0))
       ovm_counter(0L)
     }) |> bindEvent(input$shell_id, input$domain, ignoreInit = TRUE)
@@ -710,9 +840,227 @@ arsExplorerServer <- function(id, adam_reactive) {
       }
     })
 
+    # ── Render: "Validate" button — only enabled when ARD is ready ───────────
+    output$validate_btn <- renderUI({
+      if (is.null(ard_result())) {
+        tags$button(
+          class    = "btn btn-outline-info w-100 disabled mb-1",
+          disabled = NA,
+          icon("shield-check"), " Validate"
+        )
+      } else {
+        actionButton(ns("validate"), "Validate", icon = icon("shield-check"),
+                     class = "btn-outline-info w-100 mb-1")
+      }
+    })
+
+    # ── "Validate" button ─────────────────────────────────────────────────────
+    observeEvent(input$validate, {
+      req(ard_result())
+
+      withProgress(message = "Validating\u2026", value = 0.3, {
+
+        # ── Layer 1: referential integrity ──────────────────────────────────
+        l1 <- tryCatch({
+          re_full <- .embed_ard_into_re(
+            ard_result()$shell@reporting_event,
+            ard_result()$ard
+          )
+          # validate_reporting_event() returns TRUE invisibly or signals an error
+          validate_reporting_event(re_full)
+          list(pass = TRUE, message = NULL, re_full = re_full)
+        }, error = function(e) {
+          list(pass = FALSE, message = conditionMessage(e), re_full = NULL)
+        })
+
+        setProgress(0.7)
+
+        # ── Layer 3: JSON round-trip ─────────────────────────────────────────
+        l3 <- if (!is.null(l1$re_full)) {
+          tryCatch({
+            re_json  <- arscore::reporting_event_to_json(l1$re_full)
+            re_back  <- arscore::json_to_reporting_event(re_json)
+            validate_reporting_event(re_back)
+            list(pass = TRUE, message = NULL)
+          }, error = function(e) {
+            list(pass = FALSE, message = conditionMessage(e))
+          })
+        } else {
+          list(pass = FALSE,
+               message = "Skipped — Layer 1 must pass first.")
+        }
+
+        setProgress(0.9)
+
+        # ── Layer 2: CDISC JSON Schema (jsonvalidate) ────────────────────────
+        schema_path <- file.path(
+          tryCatch(
+            normalizePath(dirname(rstudioapi::getSourceEditorContext()$path)),
+            error = function(e) getwd()
+          ),
+          "model", "ars_ldm.json"
+        )
+
+        l2 <- if (!requireNamespace("jsonvalidate", quietly = TRUE)) {
+          list(pass = NA, message = NULL,
+               note = "jsonvalidate is not installed. Run: install.packages(\"jsonvalidate\")")
+        } else if (!file.exists(schema_path)) {
+          list(pass = NA, message = NULL,
+               note = paste0("Schema not found at: ", schema_path))
+        } else if (is.null(l1$re_full)) {
+          list(pass = NA, message = NULL,
+               note = "Skipped — Layer 1 must pass first.")
+        } else {
+          tryCatch({
+            re_for_schema <- .auto_main_loc(l1$re_full)
+            json_doc      <- jsonlite::fromJSON(
+              arscore::reporting_event_to_json(re_for_schema),
+              simplifyVector = FALSE
+            )
+            json_str      <- jsonlite::toJSON(
+              .strip_ars_extensions(json_doc),
+              auto_unbox = TRUE, null = "null"
+            )
+            result        <- jsonvalidate::json_validate(
+              json_str, schema_path,
+              engine  = "ajv",
+              verbose = TRUE
+            )
+            if (isTRUE(result)) {
+              list(pass = TRUE, message = NULL, note = NULL)
+            } else {
+              errs <- attr(result, "errors")
+              msg  <- if (!is.null(errs) && nrow(errs) > 0) {
+                paste(apply(errs, 1, function(r) paste0(r["instancePath"], ": ", r["message"])),
+                      collapse = "\n")
+              } else {
+                "Schema validation failed (no detail available)."
+              }
+              list(pass = FALSE, message = msg, note = NULL)
+            }
+          }, error = function(e) {
+            list(pass = FALSE, message = conditionMessage(e), note = NULL)
+          })
+        }
+
+        validate_result(list(l1 = l1, l3 = l3, l2 = l2))
+      })
+
+      nav_select(id = "tabs", selected = "Validate", session = session)
+      l2_ok  <- is.na(l2$pass) || isTRUE(l2$pass)
+      all_ok <- l1$pass && l3$pass && l2_ok
+      type   <- if (all_ok) "message" else "warning"
+      msg    <- if (all_ok) "Validation passed." else "Validation found issues — see Validate tab."
+      showNotification(msg, type = type, duration = 4)
+    })
+
+    # ── Output: validation report card (Validate tab) ─────────────────────────
+    output$validate_report <- renderUI({
+      vr <- validate_result()
+
+      if (is.null(vr)) {
+        return(div(
+          class = "d-flex flex-column align-items-center justify-content-center text-muted",
+          style = "min-height: 300px;",
+          icon("shield-check", class = "fa-2x mb-3"),
+          p("Click ", strong("Validate"), " after getting the ARD to run integrity checks.")
+        ))
+      }
+
+      .status_badge <- function(pass) {
+        if (pass)
+          tags$span(class = "badge bg-success fs-6",
+                    icon("circle-check", class = "me-1"), "PASS")
+        else
+          tags$span(class = "badge bg-danger fs-6",
+                    icon("circle-xmark", class = "me-1"), "FAIL")
+      }
+
+      .layer_card <- function(title, pass, message, note = NULL) {
+        border_cls <- if (pass) "border-success" else "border-danger"
+        card(
+          class = paste("mb-3", border_cls),
+          card_header(
+            class = if (pass) "bg-success-subtle" else "bg-danger-subtle",
+            tags$div(
+              class = "d-flex align-items-center justify-content-between",
+              strong(title),
+              .status_badge(pass)
+            )
+          ),
+          card_body(
+            if (!is.null(message))
+              tags$pre(class = "mb-0 small text-danger", .strip_ansi(message)),
+            if (!is.null(note))
+              p(class = "mb-0 small text-muted fst-italic", note)
+          )
+        )
+      }
+
+      div(
+        class = "p-3",
+        h5("ARS Compliance Validation Report"),
+        p(class = "text-muted small",
+          "Shell: ", strong(ard_result()$shell@id),
+          tags$span(class = "ms-3", icon("clock", class = "me-1"),
+                    format(Sys.time(), "%H:%M:%S"))),
+        hr(),
+
+        .layer_card(
+          "Layer 1 \u2014 Referential Integrity (validate_reporting_event)",
+          pass    = vr$l1$pass,
+          message = vr$l1$message
+        ),
+
+        .layer_card(
+          "Layer 3 \u2014 JSON Round-Trip (reporting_event_to_json \u2192 json_to_reporting_event)",
+          pass    = vr$l3$pass,
+          message = vr$l3$message
+        ),
+
+        {
+          l2 <- vr$l2
+          l2_status <- if (is.na(l2$pass)) "NOT RUN" else if (l2$pass) "PASS" else "FAIL"
+          l2_badge_cls <- switch(l2_status,
+            "PASS"    = "badge bg-success fs-6",
+            "FAIL"    = "badge bg-danger fs-6",
+            "NOT RUN" = "badge bg-secondary"
+          )
+          l2_border <- switch(l2_status,
+            "PASS"    = "border-success",
+            "FAIL"    = "border-danger",
+            "NOT RUN" = "border-secondary"
+          )
+          l2_header_cls <- switch(l2_status,
+            "PASS"    = "bg-success-subtle",
+            "FAIL"    = "bg-danger-subtle",
+            "NOT RUN" = "bg-light"
+          )
+          card(
+            class = paste("mb-3", l2_border),
+            card_header(
+              class = l2_header_cls,
+              tags$div(
+                class = "d-flex align-items-center justify-content-between",
+                strong("Layer 2 \u2014 CDISC JSON Schema (jsonvalidate)"),
+                tags$span(class = l2_badge_cls, l2_status)
+              )
+            ),
+            card_body(
+              if (!is.null(l2$message))
+                tags$pre(class = "mb-1 small text-danger", .strip_ansi(l2$message)),
+              if (!is.null(l2$note))
+                p(class = "mb-0 small text-muted fst-italic", l2$note)
+            )
+          )
+        }
+      )
+    })
+
     # ── "Get ARD" button ──────────────────────────────────────────────────────
     observeEvent(input$run_ard, {
       table_result(NULL)      # stale table is now invalid
+      validate_result(NULL)   # stale validation is now invalid
 
       withProgress(message = "Running analysis\u2026", value = 0.5, {
         result <- tryCatch({
@@ -726,12 +1074,12 @@ arsExplorerServer <- function(id, adam_reactive) {
             )
             run(sh_hydrated, adam = adam_for_shell())
           }, warning = function(w) {
-            showNotification(paste("Warning:", conditionMessage(w)),
+            showNotification(paste("Warning:", .strip_ansi(conditionMessage(w))),
                              type = "warning", duration = 6)
             invokeRestart("muffleWarning")
           })
         }, error = function(e) {
-          showNotification(paste("ARD error:", conditionMessage(e)),
+          showNotification(paste("ARD error:", .strip_ansi(conditionMessage(e))),
                            type = "error", duration = 10)
           NULL
         })
@@ -769,7 +1117,7 @@ arsExplorerServer <- function(id, adam_reactive) {
         tbl <- tryCatch(
           render(ard_result(), backend = "tfrmt"),
           error = function(e) {
-            showNotification(paste("Render error:", conditionMessage(e)),
+            showNotification(paste("Render error:", .strip_ansi(conditionMessage(e))),
                              type = "error", duration = 10)
             NULL
           }
@@ -897,6 +1245,8 @@ arsExplorerServer <- function(id, adam_reactive) {
     })
 
     # ── Download: full ARS — reporting event with results embedded ────────────
+    # .auto_main_loc() is applied here so the exported JSON satisfies the CDISC
+    # ARS JSON Schema requirement for mainListOfContents (Layer 2 compliance).
     output$dl_full_ars <- downloadHandler(
       filename = function() {
         paste0(input$shell_id %||% "ars", "_full_ars.json")
@@ -906,7 +1256,8 @@ arsExplorerServer <- function(id, adam_reactive) {
           ard_result()$shell@reporting_event,
           ard_result()$ard
         )
-        writeLines(arscore::reporting_event_to_json(re_with_results), file)
+        re_with_loc <- .auto_main_loc(re_with_results)
+        writeLines(arscore::reporting_event_to_json(re_with_loc), file)
       }
     )
 
