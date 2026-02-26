@@ -188,7 +188,8 @@ arsExplorerUI <- function(id) {
       uiOutput(ns("get_table_btn")),
 
       hr(class = "my-2"),
-      uiOutput(ns("run_status"))
+      uiOutput(ns("run_status")),
+      uiOutput(ns("export_bar"))
     ),
 
     # ── Main panel ────────────────────────────────────────────────────────────
@@ -777,6 +778,59 @@ arsExplorerServer <- function(id, adam_reactive) {
       req(table_result())
       table_result()
     })
+
+    # ── Output: export bar — appears once a shell is loaded ───────────────────
+    output$export_bar <- renderUI({
+      req(shell_obj())
+      has_ard <- !is.null(ard_result())
+
+      tagList(
+        hr(class = "my-2"),
+        strong("Export"),
+        div(
+          class = "d-grid gap-1 mt-2",
+          downloadButton(
+            outputId = ns("dl_json"),
+            label    = if (has_ard) "Reporting Event — hydrated (.json)"
+                       else         "Reporting Event — raw (.json)",
+            class    = "btn-sm btn-outline-secondary text-start"
+          ),
+          if (has_ard)
+            downloadButton(
+              outputId = ns("dl_ard"),
+              label    = "ARD (.csv)",
+              class    = "btn-sm btn-outline-secondary text-start"
+            )
+        )
+      )
+    })
+
+    # ── Download: ARS reporting event as JSON ─────────────────────────────────
+    # Uses the hydrated shell's reporting event when ARD is available (it
+    # contains real arm values and group conditions), otherwise the raw shell.
+    output$dl_json <- downloadHandler(
+      filename = function() {
+        id     <- input$shell_id %||% "shell"
+        suffix <- if (!is.null(ard_result())) "_hydrated" else "_raw"
+        paste0(id, "_reporting_event", suffix, ".json")
+      },
+      content = function(file) {
+        re <- if (!is.null(ard_result())) {
+          ard_result()$shell@reporting_event
+        } else {
+          shell_obj()@reporting_event
+        }
+        writeLines(arscore::reporting_event_to_json(re), file)
+      }
+    )
+
+    # ── Download: ARD tibble as CSV ───────────────────────────────────────────
+    output$dl_ard <- downloadHandler(
+      filename = function() paste0(input$shell_id %||% "ard", "_ard.csv"),
+      content  = function(file) {
+        write.csv(ard_result()$ard, file, row.names = FALSE)
+      }
+    )
 
     # ── Output: run status summary card ──────────────────────────────────────
     output$run_status <- renderUI({
