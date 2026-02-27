@@ -258,22 +258,10 @@ library(ars)
 }
 
 .embed_ard_into_re <- function(re, ard) {
-  # Build lookup: analysis_id → formal operation IDs (from method definition).
-  # run() appends component scalars (e.g. OP_MEAN, OP_SD from OP_MEAN_SD) that
-  # are not declared in the method; strip those before embedding so that
-  # validate_reporting_event() does not fail on unknown operation_ids.
-  methods_by_id <- setNames(re@methods, vapply(re@methods, \(m) m@id, character(1L)))
-  formal_ops <- list()
-  for (an in re@analyses) {
-    mt <- methods_by_id[[an@method_id]]
-    if (!is.null(mt))
-      formal_ops[[an@id]] <- vapply(mt@operations, \(op) op@id, character(1L))
-  }
-  keep <- vapply(seq_len(nrow(ard)), function(i) {
-    fml <- formal_ops[[ard$analysis_id[[i]]]]
-    is.null(fml) || ard$operation_id[[i]] %in% fml
-  }, logical(1L))
-  ard <- ard[keep, ]
+  # All operations in the ARD are formally declared in their method (§21 flat
+  # operations refactor removed composite OP_MEAN_SD / OP_RANGE that previously
+  # emitted undeclared component scalars).  No pre-filter is needed; every ARD
+  # row maps to a declared operation and validate_reporting_event() will pass.
 
   # Build lookup: analysis_id → list of ars_operation_result
   an_results <- list()

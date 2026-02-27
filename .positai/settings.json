@@ -6,7 +6,13 @@
     "bash": {
       "find *": "allow",
       "sort *": "allow",
-      "python *": "allow"
+      "python *": "allow",
+      "grep *": "allow",
+      "head *": "allow",
+      "python3 -c \"\nimport json\nwith open('C:/Users/lgaka/Downloads/arsworks/arsshells/inst/templates/tables/T-AE-02.json') as f:\n    d = json.load(f)\nds_list = d.get('dataSubsets', [])\nprint(f'Total data subsets: {len(ds_list)}')\nfor ds in ds_list[:5]:\n    print(json.dumps(ds, indent=2))\n\"": "allow"
+    },
+    "edit": {
+      "arstlf/tests/testthat/*": "allow"
     }
   }
 }
