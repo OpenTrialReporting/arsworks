@@ -153,7 +153,7 @@ ars 55). 0 failures, 0 new warnings.**
 
 | Item | Status |
 |------|--------|
-| T-AE-02 → CSD migration (data-driven SOC/PT groupings) | ✅ Tasks 1–6 and Phase B complete; ready to proceed |
+| T-AE-02 → CSD migration (data-driven SOC/PT groupings) | ✅ Tasks 1–6 and Phase B complete; `resultsByGroup:true` now in arsresult — **all prerequisites met** |
 | `resultsByGroup: false` / no-groupId for comparison analyses | No comparison methods yet; lower urgency |
 | New templates (T-VS-01, T-AE-03…) | Ready; all blockers resolved |
 | `gt` backend in arstlf | Independent; good stretch goal |
@@ -183,7 +183,7 @@ ars        ← Orchestrator: pipe-friendly workflow API, selective re-exports
 |---------|---------|-------|--------|
 | arscore | v0.1.0 | 1335 pass | ✅ All tasks complete; `validate_ordered_groupings` reference check added (Task 4) |
 | arsshells | v0.1.0 | 563 pass | ✅ Phase A1–A7 + Phase B1–B7 complete; T-LB-01/02 refactored to prototypes; section_map (Mode 2+3) in hydrate() |
-| arsresult | v0.1.0 | 228 pass (1 expected warn) | ✅ Phase A8–A11 complete; `dataSubsetId` filter confirmed working (Task 1); flat ops registered (Task 2) |
+| arsresult | v0.1.0 | 235 pass (1 expected warn) | ✅ Phase A8–A11 complete; `dataSubsetId` filter confirmed working (Task 1); flat ops registered (Task 2); `resultsByGroup=TRUE` expand path implemented (commit c4e609c) |
 | arstlf | v0.1.0 | 112 pass | ✅ Task 5 complete; 3 tests updated for flat ops refactor |
 | ars | v0.1.0 | 55 pass | ✅ Task 6 complete; `setup.R` path fixed; all tests pass under `devtools::test()`; **Phase C complete** — bundled datasets, `R/data.R`, `LazyData: true`, README Quick Start, getting-started vignette |
 
@@ -862,7 +862,7 @@ Step A12: All        — tests and docs for Phase A                             
 ```
 Step B1: arsshells  — add template_key to ShellSection class              ✅ DONE
 Step B2: arsshells  — refactor T-LB-01/02 JSONs to prototype sections     ✅ DONE
-Step B3: arsshells  — refactor T-AE-02 JSON to prototype SOC section           (deferred — complex; needs resultsByGroup:true first)
+Step B3: arsshells  — refactor T-AE-02 JSON to prototype SOC section           ⏳ UNBLOCKED — `resultsByGroup:true` now implemented in arsresult (commit c4e609c)
 Step B4: arsshells  — refactor T-DM-01 Race section to template section        (deferred — Race is already Mode 3 via adam)
 Step B5: arsshells  — implement Phase 6: section_map (Mode 2) in hydrate() ✅ DONE
 Step B6: arsshells  — implement Mode 3 section resolution (adam arg)       ✅ DONE
@@ -1266,7 +1266,7 @@ current rework but must not be lost. Grouped by package.
 > 33 single-cell analyses.
 >
 > **Do not model new AE templates after T-AE-02.**  The full migration requires:
-> 1. `arsresult::run()` support for `resultsByGroup: true` with data-driven AE groupings.
+> 1. ✅ `arsresult::run()` support for `resultsByGroup: true` with data-driven AE groupings (commit c4e609c).
 > 2. Replacing all SOC/PT `dataSubsets` in T-AE-02 with data-driven grouping factors.
 > 3. Replacing the `groupId` arm-pin pattern with standard multi-arm grouping.
 > 4. Retiring the `groupId` arscore extension once no templates depend on it.
