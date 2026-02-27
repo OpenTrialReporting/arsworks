@@ -1,5 +1,5 @@
 # arsworks MASTER PLAN
-**Date:** 2026-02-22 (updated 2026-02-27)  
+**Date:** 2026-02-22 (updated 2026-02-27, Phase C C1/C2/C4 committed 2026-02-27)  
 **Author:** Lovemore Gakava  
 **Status:** ACTIVE  
 **Scope:** arscore, arsshells, arsresult, arstlf, ars (tests + docs in each)  
@@ -78,16 +78,86 @@ All 55 ars tests pass (1 expected warning about unhydrated grouping factor).
 
 ---
 
+## SPRINT COMPLETE — 2026-02-27 (Session 2)
+
+Phase B — section (row) expansion — is done.  Verified by code inspection and
+full test run on 2026-02-27.
+
+### ✅ Step B1 — `template_key` on `ShellSection` — DONE
+
+`shell_section.R`: added `template_key = new_property(class_character, default = "")`.
+Constructor, format(), and `.parse_shell_section()` in `use_shell.R` all updated.
+JSON field is `"templateKey"`.
+
+### ✅ Step B2 — T-LB-01.json prototype refactor — DONE
+
+Replaced 5008-line hardcoded template (7 params × 2 timepoints) with a
+168-line prototype containing:
+- 2 prototype dataSubsets: `DS___PARAM___BL`, `DS___PARAM___CHG`
+- 24 prototype analyses (4 stats × 3 arms × 2 timepoints)
+- 2 prototype sections (`SEC___PARAM___BL`, `SEC___PARAM___CHG`) with `templateKey: "PARAMCD"`
+
+### ✅ Step B3 — T-LB-02.json prototype refactor — DONE
+
+Replaced 3670-line hardcoded template (7 params × 3 BL categories) with a
+prototype containing:
+- 9 prototype dataSubsets (3 BL × 3 POST categories)
+- 27 prototype analyses (3 BL × 3 POST × 3 arms)
+- 3 prototype sections (`SEC___PARAM___BLLow/Normal/High`) with `templateKey: "PARAMCD"`
+
+### ✅ Step B5 — Phase 6: `section_map` (Mode 2) in `hydrate()` — DONE
+
+`hydrate.R`: removed Phase B placeholder message; added Phase 6 block that
+calls `.hydrate_section_map()`; added `section_map` to `nothing_to_do` check;
+added unused-key warning and summary bullet.
+
+`.hydrate_section_map()` and helpers (`.clone_ds_with_param()`,
+`.sub_param_cond()`, `.sub_param_compound()`) added to `hydrate.R`.
+
+Placeholder `__PARAM__` is substituted in section IDs, analysis IDs, and
+data subset IDs. `__PARAM_LABEL__` is substituted in labels.
+
+### ✅ Step B6 — Mode 3 section resolution from `adam` — DONE
+
+When `adam` is supplied and the shell has prototype sections not covered by
+`section_map`, `hydrate()` auto-derives distinct values from the named dataset
+column and builds `section_map` entries automatically.
+
+### ✅ Step B7 — Tests for Phase B — DONE
+
+14 new tests in `arsshells/tests/testthat/test-hydrate.R` covering:
+- `template_key` parsed from JSON
+- T-LB-01 and T-LB-02 prototype shells pass `validate_shell()` before hydration
+- Mode 2 section expansion: section count, labels, cell IDs, analyses, data subsets
+- Mode 2: PARAMCD condition value substituted in data subsets
+- Mode 2: validate_shell() passes on expanded shell
+- Order control via `order` field in section_map entries
+- Unused section_map key emits warning
+- Mode 3: distinct PARAMCD values derived from adam
+- Mode 3: no `__PARAM__` strings remain after expansion
+
+**All 2300 tests pass (arscore 1335, arsshells 563, arsresult 235, arstlf 112,
+ars 55). 0 failures, 0 new warnings.**
+
+### Bug fix — `template_key` not preserved through Phase 2/3 group expansion
+
+`hydrate.R` `.hydrate_group_map()` and `.hydrate_adam_groups()` both rebuild
+`ShellSection` objects without passing `template_key`. Fixed by adding
+`template_key = sec@template_key` to both `new_shell_section()` calls.
+
+---
+
 ## NEXT SESSION
 
 ### Parking lot — now unblocked
 
 | Item | Status |
 |------|--------|
-| T-AE-02 → CSD migration (data-driven SOC/PT groupings) | ✅ Tasks 1–6 complete; ready to proceed |
+| T-AE-02 → CSD migration (data-driven SOC/PT groupings) | ✅ Tasks 1–6 and Phase B complete; ready to proceed |
 | `resultsByGroup: false` / no-groupId for comparison analyses | No comparison methods yet; lower urgency |
 | New templates (T-VS-01, T-AE-03…) | Ready; all blockers resolved |
 | `gt` backend in arstlf | Independent; good stretch goal |
+| Phase C — bundled CDISCPILOT01 data + getting-started vignette | ⏳ In progress: C1/C2/C4 ✅ done; C3 (README) + C5 (vignette) remaining |
 
 ---
 
@@ -112,10 +182,10 @@ ars        ← Orchestrator: pipe-friendly workflow API, selective re-exports
 | Package | Version | Tests | Status |
 |---------|---------|-------|--------|
 | arscore | v0.1.0 | 1335 pass | ✅ All tasks complete; `validate_ordered_groupings` reference check added (Task 4) |
-| arsshells | v0.1.0 | 521 pass | ✅ Phase A1–A7 complete; 6/55 templates installed; flat op IDs in cell refs (Task 2) |
+| arsshells | v0.1.0 | 563 pass | ✅ Phase A1–A7 + Phase B1–B7 complete; T-LB-01/02 refactored to prototypes; section_map (Mode 2+3) in hydrate() |
 | arsresult | v0.1.0 | 228 pass (1 expected warn) | ✅ Phase A8–A11 complete; `dataSubsetId` filter confirmed working (Task 1); flat ops registered (Task 2) |
 | arstlf | v0.1.0 | 112 pass | ✅ Task 5 complete; 3 tests updated for flat ops refactor |
-| ars | v0.1.0 | 55 pass | ✅ Task 6 complete; `setup.R` path fixed; all tests pass under `devtools::test()` |
+| ars | v0.1.0 | 55 pass | ✅ Task 6 complete; `setup.R` path fixed; all tests pass under `devtools::test()`; Phase C C1/C2/C4 complete (bundled datasets, `R/data.R`, `LazyData: true`) |
 
 ### Completed work by package
 
@@ -790,24 +860,24 @@ Step A12: All        — tests and docs for Phase A                             
 ### Phase B — Section (row) expansion
 
 ```
-Step B1: arsshells  — add template_key to ShellSection class
-Step B2: arsshells  — refactor T-LB-01/02 JSONs to prototype sections
-Step B3: arsshells  — refactor T-AE-02 JSON to prototype SOC section
-Step B4: arsshells  — refactor T-DM-01 Race section to template section
-Step B5: arsshells  — implement Phase 6: section_map (Mode 2) in hydrate()
-Step B6: arsshells  — implement Mode 3 section resolution (adam arg)
-Step B7: All        — tests and docs for Phase B
+Step B1: arsshells  — add template_key to ShellSection class              ✅ DONE
+Step B2: arsshells  — refactor T-LB-01/02 JSONs to prototype sections     ✅ DONE
+Step B3: arsshells  — refactor T-AE-02 JSON to prototype SOC section           (deferred — complex; needs resultsByGroup:true first)
+Step B4: arsshells  — refactor T-DM-01 Race section to template section        (deferred — Race is already Mode 3 via adam)
+Step B5: arsshells  — implement Phase 6: section_map (Mode 2) in hydrate() ✅ DONE
+Step B6: arsshells  — implement Mode 3 section resolution (adam arg)       ✅ DONE
+Step B7: All        — tests and docs for Phase B                           ✅ DONE
 ```
 
 ### Phase C — Bundled example data and complete README
-**Prerequisite: Phase A template branch must be merged.**
+**Prerequisite: Phase A template branch must be merged. ✅ Done (templates live on arsshells/main).**
 
 ```
-Step C1: ars  — add CDISCPILOT01 datasets as bundled package data
-Step C2: ars  — document datasets with roxygen2
-Step C3: ars  — update README with complete, runnable examples
-Step C4: ars  — add DESCRIPTION Suggests entry for data sourcing
-Step C5: ars  — getting-started vignette
+Step C1: ars  — add CDISCPILOT01 datasets as bundled package data         ✅ DONE (commit 4a60a6d)
+Step C2: ars  — document datasets with roxygen2                            ✅ DONE (commit 4a60a6d)
+Step C3: ars  — update README with complete, runnable examples             ⏳ TODO
+Step C4: ars  — add DESCRIPTION LazyData: true; data source note          ✅ DONE (commit 4a60a6d)
+Step C5: ars  — getting-started vignette                                   ⏳ TODO
 ```
 
 ---
@@ -858,14 +928,14 @@ Step C5: ars  — getting-started vignette
 
 | Package | File | Change |
 |---------|------|--------|
-| ars | `data-raw/cdiscpilot01.R` | Provenance and preparation script |
-| ars | `data/adsl.rda` | Bundled ADSL (254 × 48, CDISCPILOT01) |
-| ars | `data/adae.rda` | Bundled ADAE (1,191 × 55, CDISCPILOT01) |
-| ars | `data/adlb.rda` | Bundled ADLB (curated subset) |
-| ars | `R/data.R` | Roxygen2 documentation for all three datasets |
-| ars | `DESCRIPTION` | `LazyData: true`; data source and licence note |
-| ars | `README.md` | Full rewrite of Quick Start using bundled data |
-| ars | `vignettes/getting-started.Rmd` | End-to-end pipeline walkthrough |
+| ars | `data-raw/create_package_data.R` | ✅ Provenance and preparation script (synthetic CDISCPILOT01-style data) |
+| ars | `data/adsl.rda` | ✅ Bundled ADSL (60 subjects × 12 cols; 40-subject safety population, 2 arms) |
+| ars | `data/adae.rda` | ✅ Bundled ADAE (125 rows; covers all 6 Priority-1 AE analyses) |
+| ars | `data/adlb.rda` | ✅ Bundled ADLB (840 rows; covers T-LB-01 and T-LB-02) |
+| ars | `R/data.R` | ✅ Roxygen2 documentation for all three datasets |
+| ars | `DESCRIPTION` | ✅ `LazyData: true` added |
+| ars | `README.md` | ⏳ Full rewrite of Quick Start using bundled data (C3 — TODO) |
+| ars | `vignettes/getting-started.Rmd` | ⏳ End-to-end pipeline walkthrough (C5 — TODO) |
 
 ---
 
