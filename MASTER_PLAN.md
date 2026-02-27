@@ -1,5 +1,5 @@
 # arsworks MASTER PLAN
-**Date:** 2026-02-22 (updated 2026-02-27, Phase C C1/C2/C4 committed 2026-02-27, C3 README committed 2026-02-27)  
+**Date:** 2026-02-22 (updated 2026-02-27, Phase C **COMPLETE** — C1–C5 all committed 2026-02-27)  
 **Author:** Lovemore Gakava  
 **Status:** ACTIVE  
 **Scope:** arscore, arsshells, arsresult, arstlf, ars (tests + docs in each)  
@@ -157,7 +157,7 @@ ars 55). 0 failures, 0 new warnings.**
 | `resultsByGroup: false` / no-groupId for comparison analyses | No comparison methods yet; lower urgency |
 | New templates (T-VS-01, T-AE-03…) | Ready; all blockers resolved |
 | `gt` backend in arstlf | Independent; good stretch goal |
-| Phase C — bundled CDISCPILOT01 data + getting-started vignette | ⏳ In progress: C1/C2/C3/C4 ✅ done; C5 (vignette) remaining |
+| Phase C — bundled CDISCPILOT01 data + getting-started vignette | ✅ **COMPLETE** — C1–C5 all done |
 
 ---
 
@@ -185,7 +185,7 @@ ars        ← Orchestrator: pipe-friendly workflow API, selective re-exports
 | arsshells | v0.1.0 | 563 pass | ✅ Phase A1–A7 + Phase B1–B7 complete; T-LB-01/02 refactored to prototypes; section_map (Mode 2+3) in hydrate() |
 | arsresult | v0.1.0 | 228 pass (1 expected warn) | ✅ Phase A8–A11 complete; `dataSubsetId` filter confirmed working (Task 1); flat ops registered (Task 2) |
 | arstlf | v0.1.0 | 112 pass | ✅ Task 5 complete; 3 tests updated for flat ops refactor |
-| ars | v0.1.0 | 55 pass | ✅ Task 6 complete; `setup.R` path fixed; all tests pass under `devtools::test()`; Phase C C1/C2/C4 complete (bundled datasets, `R/data.R`, `LazyData: true`) |
+| ars | v0.1.0 | 55 pass | ✅ Task 6 complete; `setup.R` path fixed; all tests pass under `devtools::test()`; **Phase C complete** — bundled datasets, `R/data.R`, `LazyData: true`, README Quick Start, getting-started vignette |
 
 ### Completed work by package
 
@@ -877,7 +877,7 @@ Step C1: ars  — add CDISCPILOT01 datasets as bundled package data         ✅ 
 Step C2: ars  — document datasets with roxygen2                            ✅ DONE (commit 4a60a6d)
 Step C3: ars  — update README with complete, runnable examples             ✅ DONE (commit f6b5e2d)
 Step C4: ars  — add DESCRIPTION LazyData: true; data source note          ✅ DONE (commit 4a60a6d)
-Step C5: ars  — getting-started vignette                                   ⏳ TODO
+Step C5: ars  — getting-started vignette                                   ✅ DONE (commit 6dcc479)
 ```
 
 ---
@@ -935,7 +935,7 @@ Step C5: ars  — getting-started vignette                                   ⏳
 | ars | `R/data.R` | ✅ Roxygen2 documentation for all three datasets |
 | ars | `DESCRIPTION` | ✅ `LazyData: true` added |
 | ars | `README.md` | ✅ Full rewrite of Quick Start using bundled data (C3 — commit f6b5e2d) |
-| ars | `vignettes/getting-started.Rmd` | ⏳ End-to-end pipeline walkthrough (C5 — TODO) |
+| ars | `vignettes/getting-started.Rmd` | ✅ End-to-end pipeline walkthrough (C5 — commit 6dcc479) |
 
 ---
 
