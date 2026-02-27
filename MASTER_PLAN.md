@@ -52,76 +52,46 @@ All 1335 arscore tests pass.
 
 ---
 
-## NEXT SESSION — 2026-02-27 (carry-over)
+### ✅ Task 5 — Fix 3 failing arstlf tests — DONE
 
-### Task 5 — Fix 3 failing arstlf tests *(~20 min)* 🔴 BLOCKING
+Fixed `arstlf/tests/testthat/test-prep_ard.R`:
+- "geometry extraction handles multiple sections": updated expected `nrow` from
+  2 → 3 and `geom$group` to `c("Section A", "Section B", "Section B")` to
+  reflect that `OP_MEAN` expands to 2 param rows under `expand_combined_params`.
+- "prep_ard_for_tfrmt coerces raw_value to numeric": supplied both `OP_MEAN` and
+  `OP_SD` ARD rows; asserts each param value independently.
 
-The flat ops refactor (Task 2) broke 3 tests in
-`arstlf/tests/testthat/test-prep_ard.R` that weren't updated:
+All 112 arstlf tests pass.
 
-1. **"geometry extraction handles multiple sections"** (line 168) — expects
-   `nrow(geom) == 2`; now gets 3 because `OP_MEAN` cell expands to 2 param rows
-   (`OP_MEAN` + `OP_SD`).  Fix: change expected `nrow` to 3; update
-   `expect_equal(geom$group, ...)` to include the repeated "Section B".
+### ✅ Task 6 — Fix `ars` package test failures — DONE
 
-2. **"prep_ard_for_tfrmt coerces raw_value to numeric"** (line 224) — expects
-   `result$value` length 1; gets 2 because `OP_MEAN` cell produces 2 geometry
-   rows (one for `OP_MEAN`, one for `OP_SD`), and the ARD only has the `OP_MEAN`
-   row → the `OP_SD` row is NA.  Fix: either supply both ARD rows, or filter
-   `result` to `param == "OP_MEAN"` before asserting.
+Root cause: `ars/tests/testthat/setup.R` computed `.ars_root` three directory
+levels above `tests/` instead of two, landing in `Downloads/` rather than
+`arsworks/`.  The `.try_load()` calls all silently no-op'd; sibling packages
+stayed on renv-installed versions; under `devtools::test()` that caused both
+`use_shell()` template lookup and `local_mocked_bindings` to fail.
 
-3. **"prep_ard_for_tfrmt coerces raw_value to numeric"** (line 236) — same cause.
+Fix: changed `"..", "..", ".."` → `"..", ".."` so `.ars_root` correctly resolves
+to the arsworks workspace root and all sibling packages load from source.
 
-**Outcome gate:** `arstlf` test suite passes 111/111 (3 repaired).
-
----
-
-### Task 6 — Fix `ars` package test failures *(~1 hour)* 🔴 BLOCKING
-
-All ars tests fail when run via `devtools::test('ars')` because
-`local_mocked_bindings(.package = "ars")` does not intercept `use_shell()` and
-other imported functions when packages are loaded via `pkgload::load_all()`
-(a known limitation: `importFrom` bindings under `load_all` resolve to the
-original namespace rather than a per-package copy).
-
-Two options:
-
-**Option A — Rewrite mocks to use the package they originate from:**
-Replace `.package = "ars"` with `.package = "arsshells"` (for `use_shell`,
-`hydrate`) and `.package = "arsresult"` (for `run`), etc.  This matches how
-`local_mocked_bindings` works under `load_all`.
-
-**Option B — Fix `setup.R` path and load from source:**
-The `.ars_root` calculation in `ars/tests/testthat/setup.R` is off by one level:
-```r
-# Current (wrong): goes 3 levels up from tests/ → Downloads/
-file.path(dirname(testthat::test_path()), "..", "..", "..")
-# Fix: 2 levels up from tests/ → arsworks/
-file.path(dirname(testthat::test_path()), "..", "..")
-```
-With the correct root, `setup.R` would `devtools::load_all()` each sibling
-package from source.  Under `load_all`, all packages share the same namespace
-mechanism, and mocking with `.package = "ars"` may work correctly.
-
-Recommend **Option A** as the targeted fix; Option B is a nice-to-have
-improvement to `setup.R` regardless.
-
-**Outcome gate:** All ars tests pass under `devtools::test('ars')`.
+All 55 ars tests pass (1 expected warning about unhydrated grouping factor).
 
 ---
 
-### Parking lot (unchanged)
+## NEXT SESSION
 
-| Item | Reason deferred |
-|------|-----------------|
-| T-AE-02 → CSD migration (data-driven SOC/PT groupings) | Tasks 1 + 2 now stable; can proceed after Tasks 5 + 6 |
+### Parking lot — now unblocked
+
+| Item | Status |
+|------|--------|
+| T-AE-02 → CSD migration (data-driven SOC/PT groupings) | ✅ Tasks 1–6 complete; ready to proceed |
 | `resultsByGroup: false` / no-groupId for comparison analyses | No comparison methods yet; lower urgency |
-| New templates (T-VS-01, T-AE-03…) | After Tasks 5 + 6 |
+| New templates (T-VS-01, T-AE-03…) | Ready; all blockers resolved |
 | `gt` backend in arstlf | Independent; good stretch goal |
 
 ---
 
-## 0. Current State (as of 2026-02-22, updated 2026-02-26)
+## 0. Current State (as of 2026-02-22, updated 2026-02-27)
 
 ### Suite overview
 
@@ -144,8 +114,8 @@ ars        ← Orchestrator: pipe-friendly workflow API, selective re-exports
 | arscore | v0.1.0 | 1335 pass | ✅ All tasks complete; `validate_ordered_groupings` reference check added (Task 4) |
 | arsshells | v0.1.0 | 521 pass | ✅ Phase A1–A7 complete; 6/55 templates installed; flat op IDs in cell refs (Task 2) |
 | arsresult | v0.1.0 | 228 pass (1 expected warn) | ✅ Phase A8–A11 complete; `dataSubsetId` filter confirmed working (Task 1); flat ops registered (Task 2) |
-| arstlf | v0.1.0 | 108 pass / **3 fail** | ⚠️ 3 tests broken by Task 2 flat ops refactor — see Task 5 |
-| ars | v0.1.0 | **all fail** under `devtools::test()` | ⚠️ `local_mocked_bindings` incompatible with `load_all`; passes in CI — see Task 6 |
+| arstlf | v0.1.0 | 112 pass | ✅ Task 5 complete; 3 tests updated for flat ops refactor |
+| ars | v0.1.0 | 55 pass | ✅ Task 6 complete; `setup.R` path fixed; all tests pass under `devtools::test()` |
 
 ### Completed work by package
 
