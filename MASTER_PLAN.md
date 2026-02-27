@@ -1,5 +1,5 @@
 # arsworks MASTER PLAN
-**Date:** 2026-02-22  
+**Date:** 2026-02-22 (updated 2026-02-27)  
 **Author:** Lovemore Gakava  
 **Status:** ACTIVE  
 **Scope:** arscore, arsshells, arsresult, arstlf, ars (tests + docs in each)  
@@ -12,104 +12,112 @@
 
 ---
 
-## NEXT SESSION — 2026-02-27
+## SPRINT COMPLETE — 2026-02-27
 
-Prioritised sprint based on CSD analysis completed 2026-02-26.  Work the tasks
-in order — each one unblocks the next.
+All four tasks from the 2026-02-27 sprint are done.  Verified by code inspection
+and test runs on 2026-02-27.
 
----
+### ✅ Task 1 — `dataSubsetId` filtering in `arsresult::run()` — DONE
 
-### Task 1 — Verify `dataSubsetId` filtering in `arsresult::run()` *(~30 min)*
+Filter was already implemented (`run.R` step 4, lines 333–345).  Confirmed
+working: zero-row subset test added at `test-run.R:420` ("Task 1 confirmation:
+dataSubsetId filter is applied").  All 228 arsresult tests pass.
 
-**Why first:** T-AE-02 sets `dataSubsetId` on every analysis but tests still pass,
-which suggests the filter is either silently ignored or is applied but harmless.
-We need to know the truth before building on top of it.
+### ✅ Task 2 — §21 Flat operations refactor — DONE
 
-**Actions:**
-1. Open `arsresult/R/run.R` and trace the analysis execution path.
-2. Check whether `analysis@data_subset_id` is ever looked up against
-   `re@data_subsets` and applied as a row filter.
-3. If ignored: implement the filter (look up `data_subset_id` → transpile its
-   `condition`/`compoundExpression` → apply before method dispatch).
-4. Add a test: RE with a `dataSubsetId` that filters to zero rows should return
-   zero-row results, not silently full results.
+`stdlib.R` — `OP_MEAN_SD`/`OP_RANGE` removed; flat `OP_MEAN`, `OP_SD`, `OP_MIN`,
+`OP_MAX` registered individually.  `T-DM-01.json` and `T-LB-01.json` updated to
+use flat operation IDs in cell references.  `ars_explorer.R`
+`.embed_ard_into_re()` pre-filter removed (comment: "No pre-filter is needed").
 
-**Outcome gate:** `dataSubsetId` is either confirmed working (with test) or fixed
-and tested.  This is a prerequisite for the T-AE-02 → CSD migration and for all
-future AE/VS templates.
+**Leftover (arstlf tests):** 3 tests in `arstlf/tests/testthat/test-prep_ard.R`
+were not updated when `OP_MEAN` became a combined display anchor.  They expect
+`nrow(geom) == 2` and `result$value` length 1 but now get 3 and 2 respectively
+(because `expand_combined_params("OP_MEAN")` → `c("OP_MEAN", "OP_SD")` expands
+to two geometry rows).  These 3 tests need to be fixed — see §NEXT below.
 
----
+### ✅ Task 3 — `referencedOperationRelationships` on percentage operations — DONE
 
-### Task 2 — §21 Flat operations refactor *(half day)*
+`referencedOperationRelationships` present in `T-AE-01.json`, `T-AE-02.json`,
+and `T-DM-01.json`.  JSON round-trips pass; validation passes.
 
-See §21 for full background.  Remove `OP_RANGE` and `OP_MEAN_SD` composite
-operations; replace with separate declared `OP_MIN`/`OP_MAX` and
-`OP_MEAN`/`OP_SD`.
+### ✅ Task 4 — `validate_ordered_groupings` reference check — DONE
 
-**Why second:** Once `dataSubsetId` is confirmed, this is the highest-impact
-structural fix.  It eliminates the undeclared-operation-ID problem that forces
-`.embed_ard_into_re()` to pre-filter the ARD, simplifies schema validation, and
-brings `METH_CONT` into CSD alignment.
-
-**Sequence within the task:**
-1. `arsresult/R/stdlib.R` — change `METH_CONT` handler to return named list of
-   individual scalars only (no composite `OP_RANGE`/`OP_MEAN_SD`).
-2. `arsshells/inst/templates/tables/T-DM-01.json` — replace `OP_MEAN_SD`/
-   `OP_RANGE` with flat operation list; update any shell cell links.
-3. Update `ars_explorer.R` — `.embed_ard_into_re()` pre-filter becomes
-   unnecessary; simplify or remove it.
-4. Run the full test suite across all packages; fix breakages.
-5. Commit each package separately with targeted messages.
-
-**Outcome gate:** All tests green; `OP_RANGE`/`OP_MEAN_SD` absent from codebase;
-Layer 2 validation passes without the ARD pre-filter.
+`validate_reporting_event.R` lines 139–167 check that every
+`ordered_grouping@grouping_id` exists in `re@analysis_groupings` AND that
+`group_id` (when set) resolves to a real group in that factor (tagged "Task 4").
+Test added: `test-validate_reporting_event.R:1076`
+"validate catches dangling group_id that does not exist in grouping factor".
+All 1335 arscore tests pass.
 
 ---
 
-### Task 3 — `referencedOperationRelationships` on percentage operations *(~1 hour)*
+## NEXT SESSION — 2026-02-27 (carry-over)
 
-See §20 arsresult backlog for full background.
+### Task 5 — Fix 3 failing arstlf tests *(~20 min)* 🔴 BLOCKING
 
-**Why third:** After flat ops are in place, the denominator relationship can be
-declared correctly.  `METH_AE_FREQ`'s `OP_N_PCT` operation should reference
-`OP_N` (same analysis, numerator) and the header-count analysis `OP_N`
-(denominator).  `METH_CAT`'s `OP_PCT` similarly.
+The flat ops refactor (Task 2) broke 3 tests in
+`arstlf/tests/testthat/test-prep_ard.R` that weren't updated:
 
-**Actions:**
-1. Add `referencedOperationRelationships` to `OP_N_PCT` in `METH_AE_FREQ` in
-   `T-AE-01.json`, `T-AE-02.json`, and arsresult's stdlib method registry.
-2. Add the same to `OP_PCT` in `METH_CAT` in `T-DM-01.json`.
-3. Verify JSON round-trips and `validate_reporting_event()` accepts the
-   relationship references.
+1. **"geometry extraction handles multiple sections"** (line 168) — expects
+   `nrow(geom) == 2`; now gets 3 because `OP_MEAN` cell expands to 2 param rows
+   (`OP_MEAN` + `OP_SD`).  Fix: change expected `nrow` to 3; update
+   `expect_equal(geom$group, ...)` to include the repeated "Section B".
 
-**Outcome gate:** All `%` operations in templates carry formal denominator
-declarations; no validation errors introduced.
+2. **"prep_ard_for_tfrmt coerces raw_value to numeric"** (line 224) — expects
+   `result$value` length 1; gets 2 because `OP_MEAN` cell produces 2 geometry
+   rows (one for `OP_MEAN`, one for `OP_SD`), and the ARD only has the `OP_MEAN`
+   row → the `OP_SD` row is NA.  Fix: either supply both ARD rows, or filter
+   `result` to `param == "OP_MEAN"` before asserting.
 
----
+3. **"prep_ard_for_tfrmt coerces raw_value to numeric"** (line 236) — same cause.
 
-### Task 4 — `validate_ordered_groupings` reference check in arscore *(~45 min)*
-
-**Why fourth:** Quick validator win.  Currently `ordered_groupings` on an analysis
-can reference a `groupingId` that doesn't exist in `re@analysis_groupings` and the
-validator won't catch it.
-
-**Actions:**
-1. In `arscore/R/validate_reporting_event.R`, add a check: for each analysis,
-   each `ordered_grouping@grouping_id` must match an id in `re@analysis_groupings`.
-2. Add test: analysis referencing non-existent grouping should fail validation.
-
-**Outcome gate:** Validator catches the dangling reference; test added and green.
+**Outcome gate:** `arstlf` test suite passes 111/111 (3 repaired).
 
 ---
 
-### Parking lot (not this session)
+### Task 6 — Fix `ars` package test failures *(~1 hour)* 🔴 BLOCKING
+
+All ars tests fail when run via `devtools::test('ars')` because
+`local_mocked_bindings(.package = "ars")` does not intercept `use_shell()` and
+other imported functions when packages are loaded via `pkgload::load_all()`
+(a known limitation: `importFrom` bindings under `load_all` resolve to the
+original namespace rather than a per-package copy).
+
+Two options:
+
+**Option A — Rewrite mocks to use the package they originate from:**
+Replace `.package = "ars"` with `.package = "arsshells"` (for `use_shell`,
+`hydrate`) and `.package = "arsresult"` (for `run`), etc.  This matches how
+`local_mocked_bindings` works under `load_all`.
+
+**Option B — Fix `setup.R` path and load from source:**
+The `.ars_root` calculation in `ars/tests/testthat/setup.R` is off by one level:
+```r
+# Current (wrong): goes 3 levels up from tests/ → Downloads/
+file.path(dirname(testthat::test_path()), "..", "..", "..")
+# Fix: 2 levels up from tests/ → arsworks/
+file.path(dirname(testthat::test_path()), "..", "..")
+```
+With the correct root, `setup.R` would `devtools::load_all()` each sibling
+package from source.  Under `load_all`, all packages share the same namespace
+mechanism, and mocking with `.package = "ars"` may work correctly.
+
+Recommend **Option A** as the targeted fix; Option B is a nice-to-have
+improvement to `setup.R` regardless.
+
+**Outcome gate:** All ars tests pass under `devtools::test('ars')`.
+
+---
+
+### Parking lot (unchanged)
 
 | Item | Reason deferred |
 |------|-----------------|
-| T-AE-02 → CSD migration (data-driven SOC/PT groupings) | Depends on Tasks 1 + 2 being stable first |
+| T-AE-02 → CSD migration (data-driven SOC/PT groupings) | Tasks 1 + 2 now stable; can proceed after Tasks 5 + 6 |
 | `resultsByGroup: false` / no-groupId for comparison analyses | No comparison methods yet; lower urgency |
-| New templates (T-VS-01, T-AE-03…) | Do not build on old patterns until Task 2 complete |
-| `gt` backend in arstlf | Independent; good stretch goal if Tasks 1–4 run fast |
+| New templates (T-VS-01, T-AE-03…) | After Tasks 5 + 6 |
+| `gt` backend in arstlf | Independent; good stretch goal |
 
 ---
 
@@ -133,11 +141,11 @@ ars        ← Orchestrator: pipe-friendly workflow API, selective re-exports
 
 | Package | Version | Tests | Status |
 |---------|---------|-------|--------|
-| arscore | v0.1.0 | ~609 test blocks | ✅ Complete; `is_total` on `ars_group` done |
-| arsshells | v0.1.0 | ~214 test blocks | ✅ Phase A1–A7 complete; 6/55 templates installed; `hydrate()` Phases 2–5 implemented |
-| arsresult | v0.1.0 | ~143 test blocks | ✅ Phase A8–A11 bug fixes complete |
-| arstlf | v0.1.0 | ~56 test blocks | ✅ Phase 4b complete; tfrmt backend only |
-| ars | v0.1.0 | ~31 test blocks (54 pass) | ✅ Phase A complete; all integration tests hydrated and passing |
+| arscore | v0.1.0 | 1335 pass | ✅ All tasks complete; `validate_ordered_groupings` reference check added (Task 4) |
+| arsshells | v0.1.0 | 521 pass | ✅ Phase A1–A7 complete; 6/55 templates installed; flat op IDs in cell refs (Task 2) |
+| arsresult | v0.1.0 | 228 pass (1 expected warn) | ✅ Phase A8–A11 complete; `dataSubsetId` filter confirmed working (Task 1); flat ops registered (Task 2) |
+| arstlf | v0.1.0 | 108 pass / **3 fail** | ⚠️ 3 tests broken by Task 2 flat ops refactor — see Task 5 |
+| ars | v0.1.0 | **all fail** under `devtools::test()` | ⚠️ `local_mocked_bindings` incompatible with `load_all`; passes in CI — see Task 6 |
 
 ### Completed work by package
 
