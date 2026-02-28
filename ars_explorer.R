@@ -112,7 +112,17 @@ library(ars)
 # ── Helper: find Mode-2 (pre-specified, non-data-driven) grouping factors ─────
 
 .extract_mode2_gfs <- function(shell) {
-  Filter(function(gf) !isTRUE(gf@data_driven), shell@reporting_event@analysis_groupings)
+  # Mode 2: data_driven = FALSE, and groups either absent or all lack conditions.
+  #   Groups without conditions need hydration via grp_map (e.g. GRP_TRT).
+  # Mode 1: data_driven = FALSE, groups present and ALL have explicit conditions.
+  #   Those are fully specified in the template (e.g. GRP_SEX with SEX EQ "M"/
+  #   "F") — fixed; must not appear in the user-configurable arm-label UI.
+  # Mode 3: data_driven = TRUE — excluded separately in the caller.
+  Filter(function(gf) {
+    if (isTRUE(gf@data_driven)) return(FALSE)
+    if (length(gf@groups) == 0L) return(TRUE)
+    all(vapply(gf@groups, function(g) is.null(g@condition), logical(1L)))
+  }, shell@reporting_event@analysis_groupings)
 }
 
 # ── Helper: strip arscore extensions before CDISC JSON Schema validation ──────
