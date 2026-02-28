@@ -265,6 +265,11 @@ ars_pipeline(
 # Full pharmaverseadam ADLB has 47 PARAMCDs; expanding all of them creates
 # ~1500 analyses and takes several minutes.  Curating to the clinically
 # relevant subset keeps run() under 15 seconds.
+#
+# IMPORTANT: adlb_lb01 MUST be rebuilt from the derived `adlb` object in this
+# session (i.e. AFTER the PLAT->PLT rename and ABLFL/ANL01FL flag alignment
+# above).  Never reuse adlb_lb01 from a previous session; the flag alignment
+# is required for BL and CHG filters to return non-empty data.
 adlb_lb01 <- adlb[adlb$PARAMCD %in% c("HGB","PLT","WBC","ALT","AST","CREAT","GLUC"), ]
 
 ard_lb01 <- use_shell("T-LB-01") |>
@@ -292,6 +297,7 @@ ars_pipeline(
 
 # ── T-LB-02 — Shift Table (Baseline vs. Post-Baseline Normal Range) ───────────
 # Note: WGRNRIND derived from ANRIND (post-baseline normal range indicator)
+# Same session-state warning as T-LB-01: always rebuild adlb_lb02 from `adlb`.
 # Scope to 3 key parameters (hematology + liver + renal).
 adlb_lb02 <- adlb[adlb$PARAMCD %in% c("HGB","ALT","CREAT"), ]
 

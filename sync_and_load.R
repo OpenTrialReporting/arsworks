@@ -17,7 +17,18 @@
 #   - git must be on PATH (only needed for the pull step)
 #   - You must be inside the arsworks/ directory (or adjust ROOT below)
 
-ROOT <- normalizePath(dirname(rstudioapi::getSourceEditorContext()$path))
+# Resolve the project root: prefer the directory containing this script (when
+# sourced from an editor tab), fall back to getwd() (console / untitled tab).
+.src_path <- tryCatch(
+  rstudioapi::getSourceEditorContext()$path,
+  error = function(e) ""
+)
+ROOT <- if (nchar(.src_path) > 0L && file.exists(.src_path)) {
+  normalizePath(dirname(.src_path))
+} else {
+  normalizePath(getwd())
+}
+rm(.src_path)
 
 PACKAGES <- c("arscore", "arsshells", "arsresult", "arstlf", "ars")
 
