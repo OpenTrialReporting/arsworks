@@ -12,6 +12,30 @@
 
 ---
 
+## SPRINT COMPLETE — 2026-02-28 (Session 2)
+
+### ✅ §21 composite ops refactor — verified COMPLETE (2026-02-28)
+
+Confirmed all components of the §21 flat operations refactor are in place:
+
+- `arsresult/R/stdlib.R`: Returns flat scalars only (`OP_MEAN`, `OP_SD`, `OP_MIN`,
+  `OP_MAX`). No `OP_MEAN_SD` or `OP_RANGE` composite ops.
+- `T-DM-01.json`: Method ops declared as flat; cell `operationId`s use `OP_MEAN`
+  (anchor for Mean+SD) and `OP_MIN` (anchor for Min+Max).
+- `T-LB-01.json`: Same flat declarations and cell refs. Analysis IDs contain
+  `OP_MEAN_SD`/`OP_RANGE` in the name segment only (cosmetic; not functional).
+- `arstlf/R/prep_ard.R`: `.combined_ops` registry maps `OP_MEAN→[OP_MEAN,OP_SD]`
+  and `OP_MIN→[OP_MIN,OP_MAX]`; `expand_combined_params()` exported.
+- `arstlf/R/render_tfrmt.R`: `frmt_combine()` keyed on `OP_MIN` and `OP_MEAN`.
+- `ars_explorer.R` `.embed_ard_into_re()`: Pre-filter removed; comment confirms
+  "No pre-filter needed" since all ops are now formally declared.
+
+**End-to-end validation:** T-LB-01 hydrated (7 PARAMCDs, 3 arms) → run → render
+produces 1,344 ARD rows with operation IDs `{OP_COUNT, OP_MAX, OP_MEAN, OP_MEDIAN,
+OP_MIN, OP_SD}` and renders cleanly to a `gt_tbl`. Zero warnings.
+
+---
+
 ## SPRINT COMPLETE — 2026-02-28
 
 Full pipeline validation and test hardening session.  All 6 templates pass
@@ -220,7 +244,7 @@ pipe tests rewritten with proper data-driven hydration.**
 |----------|------|-------|
 | **1** | **New template batch** (T-VS-01, T-AE-03, T-AE-04, T-AE-05, T-EF-01, T-EX-01) | All blockers resolved; highest-leverage work — each new template validates the framework against different data shapes (ADVS, ADEX, ADEFF) |
 | **2** | **`gt` backend in arstlf** | High priority in §20; removes tfrmt dependency for direct gt assembly |
-| **3** | **§21 composite ops refactor** | Split `OP_RANGE` → `OP_MIN`+`OP_MAX`, `OP_MEAN_SD` → `OP_MEAN`+`OP_SD` to align with CSD spec; currently causes validation/round-trip issues |
+| **3** | ~~**§21 composite ops refactor**~~ | ✅ **COMPLETE** — verified 2026-02-28. All flat ops in place across stdlib.R, templates, prep_ard.R, render_tfrmt.R, and ars_explorer.R. |
 | **4** | `resultsByGroup: false` for comparison analyses | Enables p-value/ANOVA methods (Chi-sq, Fisher exact) |
 | **5** | `referencedOperationRelationships` formal denominator | Needed for strict ARS JSON consumers |
 

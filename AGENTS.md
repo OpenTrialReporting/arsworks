@@ -57,6 +57,24 @@ grp_map <- list(
 | `sync_and_load.R` | Loads all ars* packages via `devtools::load_all()` |
 | `bootstrap.R` | Bootstraps renv from lockfile |
 
+## §21 Composite Ops Refactor — COMPLETE (verified 2026-02-28)
+
+All components of the flat operations refactor (§21) are in place and verified:
+
+- **`arsresult/R/stdlib.R`**: Flat scalars only — `OP_MEAN`, `OP_SD`, `OP_MIN`, `OP_MAX`.
+  No `OP_MEAN_SD` or `OP_RANGE`.
+- **Template JSONs** (`T-DM-01`, `T-LB-01`): Method ops declared flat; cell `operationId`s
+  use `OP_MEAN` (Mean+SD anchor) and `OP_MIN` (Min+Max anchor).
+- **`arstlf/R/prep_ard.R`**: `.combined_ops` maps `OP_MEAN→[OP_MEAN,OP_SD]`,
+  `OP_MIN→[OP_MIN,OP_MAX]`.
+- **`arstlf/R/render_tfrmt.R`**: `frmt_combine()` keyed on `OP_MIN` and `OP_MEAN`.
+- **`ars_explorer.R`**: `.embed_ard_into_re()` pre-filter removed; no longer needed.
+
+T-LB-01 end-to-end: 1,344 ARD rows, ops = `{OP_COUNT, OP_MAX, OP_MEAN, OP_MEDIAN,
+OP_MIN, OP_SD}`, renders to `gt_tbl` cleanly. Full suite: 2,262 expectations, 0 failures.
+
+---
+
 ## Recent Changes (2026-02-28)
 
 ### Fix: Empty-data guards in `arsresult/R/stdlib.R`
