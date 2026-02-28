@@ -1,5 +1,5 @@
 # arsworks MASTER PLAN
-**Date:** 2026-02-22 (updated 2026-02-27, Phase C **COMPLETE** — C1–C5 all committed 2026-02-27)  
+**Date:** 2026-02-22 (updated 2026-02-28, Phase C **COMPLETE** — test hardening + performance fixes 2026-02-28)  
 **Author:** Lovemore Gakava  
 **Status:** ACTIVE  
 **Scope:** arscore, arsshells, arsresult, arstlf, ars (tests + docs in each)  
@@ -9,6 +9,69 @@
 > All per-package planning files (`ARS_DEVELOPMENT_PLAN.md`, `ARSSHELLS_PLAN.md`,
 > `NEXT_STEPS.md`, `format_improvement_plan.md`) have been merged here and replaced
 > with redirect notices. Do not maintain separate planning files in sub-packages.
+
+---
+
+## SPRINT COMPLETE — 2026-02-28
+
+Full pipeline validation and test hardening session.  All 6 templates pass
+end-to-end; all 2329 tests pass (0 failures, 1 skip).
+
+### ✅ Test hardening — cli line-wrap regex fixes (3 packages)
+
+`cli::cli_abort()` / `cli_warn()` wrap long messages with `\n`, breaking
+`expect_error` / `expect_warning` regexes that matched literal phrases split
+across lines (e.g. `"missing\nrequired"`, `"data\nframe"`, `"Mode\n  2"`).
+
+| File | Old regex | New regex |
+|------|-----------|-----------|
+| `arscore/tests/testthat/test-create_ard.R:131` | `"missing required"` | `"is missing"` |
+| `arstlf/tests/testthat/test-prep_ard.R:348` | `"data frame"` | `"must be a data"` |
+| `arstlf/tests/testthat/test-prep_ard.R:354` | `"missing required columns"` | `"is missing"` |
+| `arsshells/tests/testthat/test-hydrate.R:391` | `"Mode 2"` | `"GRP_TRT"` |
+
+### ✅ Test fixture fix — `__NONE__` sentinel → `NA` (3 files)
+
+Test fixtures for T-AE-02 used `AEBODSYS = "__NONE__"` and `AEDECOD = "__NONE__"`
+on sentinel rows.  Mode 3 expansion picked these up as real SOC/PT values,
+inflating section and group counts.  Changed to `NA_character_` so they are
+excluded by the `!is.na()` filter in `hydrate()`.
+
+- `arsshells/tests/testthat/test-hydrate.R` (`.ae02_adae()`)
+- `arsshells/tests/testthat/test-template-T-AE-02.R` (`.adae_ae02()`)
+- `ars/tests/testthat/test-integration-T-AE-02.R` (`.adae_ae02()`)
+
+### ✅ Test update — T-AE-02 template restructure (arsresult)
+
+`arsresult/tests/testthat/test-transpile.R`: T-AE-02 template now has a single
+`DS_TEAE` data subset with a simple `ars_where_clause_condition` (TRTEMFL EQ "Y")
+instead of the old `DS_SOC_CARDIAC` compound expression.  Updated test to use
+`transpile_condition()` instead of `transpile_compound()`.
+
+### ✅ Test rewrite — pipe tests (ars)
+
+`ars/tests/testthat/test-pipe.R`: Rewrote all pipe tests with shared fixture
+helpers (`.pipe_adsl()`, `.pipe_adae()`, `.pipe_shell()`) that properly pass
+`adam` to `hydrate()` for data-driven group resolution.  The old tests hydrated
+T-AE-02 without `adam`, leaving GRP_SOC / GRP_PT unresolved.
+
+`ars/tests/testthat/setup.R`: Added `run <- ars::run; render <- ars::render`
+to ensure ars wrappers shadow `arsresult::run` / `arstlf::render` regardless
+of `devtools::load_all()` search path ordering.
+
+### ✅ Performance fix — lab template PARAMCD scoping
+
+`data_table_examples.R`: Full pharmaverseadam ADLB has 47 PARAMCDs; Mode 3
+expansion created 1504–1692 analyses, taking 2–3.5 minutes per lab template.
+Scoped ADLB to curated subsets before passing to `hydrate()` / `run()`:
+
+| Template | PARAMCDs | Before | After | Speedup |
+|----------|----------|--------|-------|---------|
+| T-LB-01 | 7 (HGB, PLT, WBC, ALT, AST, CREAT, GLUC) | ~2m 30s (1504 analyses) | 5.3s (224 analyses) | ~28× |
+| T-LB-02 | 3 (HGB, ALT, CREAT) | ~3m 30s (1692 analyses) | 1.8s (108 analyses) | ~117× |
+
+The full `adlb` object is preserved for other uses; only the `adam` argument to
+`hydrate()` / `run()` receives the filtered subset.
 
 ---
 
@@ -136,8 +199,10 @@ column and builds `section_map` entries automatically.
 - Mode 3: distinct PARAMCD values derived from adam
 - Mode 3: no `__PARAM__` strings remain after expansion
 
-**All 2300 tests pass (arscore 1335, arsshells 563, arsresult 235, arstlf 112,
-ars 55). 0 failures, 0 new warnings.**
+**All 2329 tests pass (arscore 1335, arsshells 552, arsresult 235, arstlf 112,
+ars 95). 0 failures, 1 skip (group ID sanitisation). Test fixes: cli line-wrap
+regex hardening, `__NONE__` → `NA` sentinel fix, T-AE-02 transpile test updated,
+pipe tests rewritten with proper data-driven hydration.**
 
 ### Bug fix — `template_key` not preserved through Phase 2/3 group expansion
 
@@ -149,19 +214,28 @@ ars 55). 0 failures, 0 new warnings.**
 
 ## NEXT SESSION
 
-### Parking lot — now unblocked
+### Recommended priorities
+
+| Priority | Item | Notes |
+|----------|------|-------|
+| **1** | **New template batch** (T-VS-01, T-AE-03, T-AE-04, T-AE-05, T-EF-01, T-EX-01) | All blockers resolved; highest-leverage work — each new template validates the framework against different data shapes (ADVS, ADEX, ADEFF) |
+| **2** | **`gt` backend in arstlf** | High priority in §20; removes tfrmt dependency for direct gt assembly |
+| **3** | **§21 composite ops refactor** | Split `OP_RANGE` → `OP_MIN`+`OP_MAX`, `OP_MEAN_SD` → `OP_MEAN`+`OP_SD` to align with CSD spec; currently causes validation/round-trip issues |
+| **4** | `resultsByGroup: false` for comparison analyses | Enables p-value/ANOVA methods (Chi-sq, Fisher exact) |
+| **5** | `referencedOperationRelationships` formal denominator | Needed for strict ARS JSON consumers |
+
+### Parking lot — resolved items
 
 | Item | Status |
 |------|--------|
 | T-AE-02 → CSD migration (data-driven SOC/PT groupings) | ✅ Tasks 1–6 and Phase B complete; `resultsByGroup:true` now in arsresult — **all prerequisites met** |
-| `resultsByGroup: false` / no-groupId for comparison analyses | No comparison methods yet; lower urgency |
-| New templates (T-VS-01, T-AE-03…) | Ready; all blockers resolved |
-| `gt` backend in arstlf | Independent; good stretch goal |
 | Phase C — bundled CDISCPILOT01 data + getting-started vignette | ✅ **COMPLETE** — C1–C5 all done |
+| Test hardening (cli line-wrap, `__NONE__` sentinels, pipe namespace) | ✅ **COMPLETE** — 2026-02-28; 2329 tests, 0 failures |
+| Lab template performance (`data_table_examples.R`) | ✅ **COMPLETE** — ADLB scoped to curated PARAMCDs; 28–117× speedup |
 
 ---
 
-## 0. Current State (as of 2026-02-22, updated 2026-02-27)
+## 0. Current State (as of 2026-02-22, updated 2026-02-28)
 
 ### Suite overview
 
@@ -182,10 +256,10 @@ ars        ← Orchestrator: pipe-friendly workflow API, selective re-exports
 | Package | Version | Tests | Status |
 |---------|---------|-------|--------|
 | arscore | v0.1.0 | 1335 pass | ✅ All tasks complete; `validate_ordered_groupings` reference check added (Task 4) |
-| arsshells | v0.1.0 | 563 pass | ✅ Phase A1–A7 + Phase B1–B7 complete; T-LB-01/02 refactored to prototypes; section_map (Mode 2+3) in hydrate() |
-| arsresult | v0.1.0 | 235 pass (1 expected warn) | ✅ Phase A8–A11 complete; `dataSubsetId` filter confirmed working (Task 1); flat ops registered (Task 2); `resultsByGroup=TRUE` expand path implemented (commit c4e609c) |
-| arstlf | v0.1.0 | 112 pass | ✅ Task 5 complete; 3 tests updated for flat ops refactor |
-| ars | v0.1.0 | 55 pass | ✅ Task 6 complete; `setup.R` path fixed; all tests pass under `devtools::test()`; **Phase C complete** — bundled datasets, `R/data.R`, `LazyData: true`, README Quick Start, getting-started vignette |
+| arsshells | v0.1.0 | 552 pass | ✅ Phase A1–A7 + Phase B1–B7 complete; T-LB-01/02 refactored to prototypes; section_map (Mode 2+3) in hydrate(); test fixtures updated for `__NONE__` → `NA` sentinel fix and cli line-wrap regex hardening |
+| arsresult | v0.1.0 | 235 pass (1 expected warn) | ✅ Phase A8–A11 complete; `dataSubsetId` filter confirmed working (Task 1); flat ops registered (Task 2); `resultsByGroup=TRUE` expand path implemented (commit c4e609c); transpile test updated for T-AE-02 template restructure (DS_TEAE simple condition) |
+| arstlf | v0.1.0 | 112 pass | ✅ Task 5 complete; 3 tests updated for flat ops refactor; `expect_error` regexes hardened against cli line-wrapping |
+| ars | v0.1.0 | 95 pass (1 skip) | ✅ Task 6 complete; `setup.R` path fixed + `run`/`render` shadowing fix; test-pipe.R rewritten with proper data-driven hydration; integration T-AE-02 fixtures updated; **Phase C complete** — bundled datasets, `R/data.R`, `LazyData: true`, README Quick Start, getting-started vignette |
 
 ### Completed work by package
 

@@ -252,21 +252,27 @@ ars_pipeline(
 
 
 # ── T-LB-01 — Summary of Laboratory Parameters ───────────────────────────────
+# Scope ADLB to the 7 standard hematology/chemistry parameters.
+# Full pharmaverseadam ADLB has 47 PARAMCDs; expanding all of them creates
+# ~1500 analyses and takes several minutes.  Curating to the clinically
+# relevant subset keeps run() under 15 seconds.
+adlb_lb01 <- adlb[adlb$PARAMCD %in% c("HGB","PLT","WBC","ALT","AST","CREAT","GLUC"), ]
+
 ard_lb01 <- use_shell("T-LB-01") |>
   hydrate(
     variable_map = c(TRT01A = "TRT01A", SAFFL = "SAFFL",
                      PARAMCD = "PARAMCD", ANL01FL = "ANL01FL",
                      ABLFL = "ABLFL", AVAL = "AVAL", CHG = "CHG"),
     group_map    = grp_map,
-    adam         = list(ADLB = adlb, ADSL = adsl)
+    adam         = list(ADLB = adlb_lb01, ADSL = adsl)
   ) |>
-  run(adam = list(ADLB = adlb, ADSL = adsl))
+  run(adam = list(ADLB = adlb_lb01, ADSL = adsl))
 render(ard_lb01, backend = "tfrmt")
 
 # ars_pipeline() equivalent
 ars_pipeline(
   shell        = "T-LB-01",
-  adam         = list(ADLB = adlb, ADSL = adsl),
+  adam         = list(ADLB = adlb_lb01, ADSL = adsl),
   variable_map = c(TRT01A = "TRT01A", SAFFL = "SAFFL",
                    PARAMCD = "PARAMCD", ANL01FL = "ANL01FL",
                    ABLFL = "ABLFL", AVAL = "AVAL", CHG = "CHG"),
@@ -277,21 +283,24 @@ ars_pipeline(
 
 # ── T-LB-02 — Shift Table (Baseline vs. Post-Baseline Normal Range) ───────────
 # Note: WGRNRIND derived from ANRIND (post-baseline normal range indicator)
+# Scope to 3 key parameters (hematology + liver + renal).
+adlb_lb02 <- adlb[adlb$PARAMCD %in% c("HGB","ALT","CREAT"), ]
+
 ard_lb02 <- use_shell("T-LB-02") |>
   hydrate(
     variable_map = c(TRT01A = "TRT01A", SAFFL = "SAFFL",
                      PARAMCD = "PARAMCD", ANL01FL = "ANL01FL",
                      BNRIND = "BNRIND", WGRNRIND = "WGRNRIND"),
     group_map    = grp_map,
-    adam         = list(ADLB = adlb, ADSL = adsl)
+    adam         = list(ADLB = adlb_lb02, ADSL = adsl)
   ) |>
-  run(adam = list(ADLB = adlb, ADSL = adsl))
+  run(adam = list(ADLB = adlb_lb02, ADSL = adsl))
 render(ard_lb02, backend = "tfrmt")
 
 # ars_pipeline() equivalent
 ars_pipeline(
   shell        = "T-LB-02",
-  adam         = list(ADLB = adlb, ADSL = adsl),
+  adam         = list(ADLB = adlb_lb02, ADSL = adsl),
   variable_map = c(TRT01A = "TRT01A", SAFFL = "SAFFL",
                    PARAMCD = "PARAMCD", ANL01FL = "ANL01FL",
                    BNRIND = "BNRIND", WGRNRIND = "WGRNRIND"),
