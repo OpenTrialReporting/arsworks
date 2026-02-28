@@ -228,21 +228,30 @@ ars_pipeline(
 
 
 # ── T-AE-02 — TEAEs by System Organ Class and Preferred Term ─────────────────
+# Scope ADAE to treatment-emergent events (TRTEMFL = "Y") before hydrating.
+# The full adae includes non-TEAE rows; Mode 3 expansion on the full dataset
+# derives 242 PT groups (including PTs that only appear in non-TEAE events).
+# Those 12 orphan PTs are absent from base_data after the run() TRTEMFL filter,
+# which triggers the Cartesian-product fallback (~96 s for 21,160 combos).
+# Pre-filtering to TEAE rows is also semantically correct: T-AE-02 is a TEAE
+# table, so SOC/PT groups should be derived from TEAE events only.
+adae_teae <- adae[!is.na(adae$TRTEMFL) & adae$TRTEMFL == "Y", ]
+
 ard_ae02 <- use_shell("T-AE-02") |>
   hydrate(
     variable_map = c(TRT01A = "TRT01A", SAFFL = "SAFFL",
                      TRTEMFL = "TRTEMFL",
                      AEBODSYS = "AEBODSYS", AEDECOD = "AEDECOD"),
     group_map    = grp_map,
-    adam         = list(ADAE = adae, ADSL = adsl)
+    adam         = list(ADAE = adae_teae, ADSL = adsl)
   ) |>
-  run(adam = list(ADAE = adae, ADSL = adsl))
+  run(adam = list(ADAE = adae_teae, ADSL = adsl))
 render(ard_ae02, backend = "tfrmt")
 
 # ars_pipeline() equivalent
 ars_pipeline(
   shell        = "T-AE-02",
-  adam         = list(ADAE = adae, ADSL = adsl),
+  adam         = list(ADAE = adae_teae, ADSL = adsl),
   variable_map = c(TRT01A = "TRT01A", SAFFL = "SAFFL",
                    TRTEMFL = "TRTEMFL",
                    AEBODSYS = "AEBODSYS", AEDECOD = "AEDECOD"),

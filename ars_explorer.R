@@ -502,6 +502,21 @@ arsExplorerServer <- function(id, adam_reactive) {
       )
     })
 
+    # ── Reactive: mock-rendered gt table (shared by Shell and Compare tabs) ───
+    # Memoized so render_mock() is called once per shell switch, not twice.
+    shell_mock_gt <- reactive({
+      sh <- shell_obj()
+      req(sh)
+      tryCatch(
+        render_mock(sh),
+        error = function(e) {
+          showNotification(paste("Mock render failed:", .strip_ansi(conditionMessage(e))),
+                           type = "warning", duration = 6)
+          NULL
+        }
+      )
+    })
+
     # ── Reactive: all column names available from relevant datasets ────────────
     all_cols <- reactive({
       m <- selected_meta()
@@ -788,16 +803,7 @@ arsExplorerServer <- function(id, adam_reactive) {
 
     # ── Output: mock-rendered shell (Shell tab) ───────────────────────────────
     output$shell_mock <- gt::render_gt({
-      sh <- shell_obj()
-      req(sh)
-      tryCatch(
-        render_mock(sh),
-        error = function(e) {
-          showNotification(paste("Mock render failed:", .strip_ansi(conditionMessage(e))),
-                           type = "warning", duration = 6)
-          NULL
-        }
-      )
+      shell_mock_gt()
     })
 
     # ── State: ARD, table, and validation results ──────────────────────────────
@@ -1166,9 +1172,7 @@ arsExplorerServer <- function(id, adam_reactive) {
 
     # ── Outputs: Compare tab — mock (left) and rendered (right) ──────────────
     output$compare_mock <- gt::render_gt({
-      sh <- shell_obj()
-      req(sh)
-      tryCatch(render_mock(sh), error = function(e) NULL)
+      shell_mock_gt()
     })
 
     output$compare_rendered_ui <- renderUI({
@@ -1296,7 +1300,7 @@ arsExplorerServer <- function(id, adam_reactive) {
 # ── App wiring ────────────────────────────────────────────────────────────────
 
 # Load test data if not already in session
-if (!all(c("adsl", "adae", "adlb") %in% ls(envir = .GlobalEnv))) {
+if (!all(c("adsl", "adae", "adlb", "adlb_lb01") %in% ls(envir = .GlobalEnv))) {
   message("Loading test data from data_table_examples.R ...")
   root <- tryCatch(
     normalizePath(dirname(rstudioapi::getSourceEditorContext()$path)),
@@ -1305,7 +1309,19 @@ if (!all(c("adsl", "adae", "adlb") %in% ls(envir = .GlobalEnv))) {
   source(file.path(root, "data_table_examples.R"))
 }
 
-adam_list <- list(ADSL = adsl, ADAE = adae, ADLB = adlb)
+# Use the curated 7-PARAMCD subset for ADLB.  The full adlb has 47 PARAMCDs;
+# Mode 3 expansion would create ~1500 analyses for T-LB-01 (~3 min).
+# adlb_lb01 (HGB, PLT, WBC, ALT, AST, CREAT, GLUC) is a superset of
+# adlb_lb02 (HGB, ALT, CREAT) and covers both lab templates in ~5s.
+#
+# Use TEAE-filtered adae for AE shells.  The full adae includes non-TEAE rows
+# (TRTEMFL = NA/"N"); Mode 3 expansion on the full dataset creates 242 PT
+# groups (including non-TEAE PTs) instead of 230.  The 12 orphan PTs trigger
+# the Cartesian-product fallback in run() (~96 s for T-AE-02).  Filtering to
+# TRTEMFL = "Y" first ensures Mode 3 derives only TEAE events, all 230 groups
+# appear in base_data, and the observed-combo fast path applies (~4 s).
+adae_teae <- adae[!is.na(adae$TRTEMFL) & adae$TRTEMFL == "Y", ]
+adam_list <- list(ADSL = adsl, ADAE = adae_teae, ADLB = adlb_lb01)
 
 ui <- arsExplorerUI("explorer")
 
