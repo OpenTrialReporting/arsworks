@@ -119,18 +119,92 @@ raw_value   = "0"
 
 ---
 
-## End-to-end validation (2026-02-28)
+## PIN-path pre-filter cache — COMPLETE (2026-02-28)
 
-All 6 shells clean (hydrate → run → render). Full sprint notes in `MASTER_PLAN.md`.
+`arsresult/R/run.R` PIN path now caches the analysis-set + pin-group filtered
+dataset and the pre-computed `analysis_set_n` on first use, keyed by
+`"<ds_name>\x1F<as_id>\x1F<pin_group_ids>"`.
 
-| Shell | ARD Rows | Table Rows | Warnings |
-|-------|----------|------------|----------|
-| T-DM-01 | 72 | 16 | 0 |
-| T-DS-01 | 72 | 13 | 0 |
-| T-AE-01 | 56 | 9 | 0 |
-| T-AE-02 | 88 | 299 | 0 |
-| T-LB-01 | 1008 | 84 | 0 |
-| T-LB-02 | 216 | 45 | 0 |
+### Motivation
 
-Test suites: arscore ✓ (1335), arsshells ✓ (552), arsresult ✓ (266, 1 expected warning),
-arstlf ✓ (112), ars ✓ (95). **Total: 2360 expectations, 0 failures.**
+For T-LB-01 with 47 PARAMCDs, `run()` produces 1,504 PIN-path analyses but
+only 4 unique arm groups. Without caching, the full 83k-row ADLB was
+filtered by SAFFL and arm condition **1,504 times** (vec_slice at 88% of
+profile). With the cache those 2 filters fire **4 times**; each analysis then
+only applies its unique data-subset filter (~15k-row arm slice → ~50-row
+param+timepoint slice).
+
+### Benchmarks (83,652-row ADLB × 47 PARAMCDs = 1,504 analyses)
+
+| Version | Time |
+|---------|------|
+| Before cache | ~112 s |
+| After cache  | ~6.5 s |
+
+For the 7-param installed shell (224 analyses, same 83k ADLB): ~6.5 s before,
+~1.5 s after.
+
+### Design
+
+- Cache lives in a fresh `new.env(hash = TRUE)` created per `run()` call
+  (no cross-call state).
+- Only active for PIN path (`length(expand_factors) == 0`).
+- Expand path (T-AE-02, any `resultsByGroup = TRUE`) unchanged.
+- Grouping classification moved before the AS filter so the cache key is
+  available before any dplyr calls.
+
+### Missing statistics in the ARD
+
+When a data-subset filter yields 0 rows (e.g. a PARAMCD with no post-baseline
+records for a given arm), the stdlib functions return explicit `NA_real_`:
+
+```r
+# stdlib.R  (.fn_max, .fn_min, .fn_median, .fn_sd)
+non_na <- vals[!is.na(vals)]
+c(OP_MAX = if (length(non_na) > 0) max(non_na) else NA_real_)
+```
+
+`OP_COUNT` returns `0` (not NA); all other continuous statistics return NA.
+
+This propagates as `raw_value = "NA"` (string) in the ARD.
+`prep_ard.R` converts it via `suppressWarnings(as.numeric("NA")) = NA_real_`,
+and `tfrmt::frmt("xx.x")` renders `NA_real_` as an **empty string** (default
+`missing = ""`), so the table cell is blank rather than showing "NA" or "—".
+
+If an analysis is **skipped entirely** (dataset not found, analysis_set not
+found, or data_subset_id not found), no ARD rows are generated at all for that
+analysis_id, and the corresponding cells are also blank in the final table.
+
+---
+
+## End-to-end validation (2026-02-28, source packages)
+
+All 6 shells clean (hydrate → run → render) using source packages loaded via
+`sync_and_load.R`. Results reflect the source template versions (not the
+pre-expanded templates stored in the renv library). Full sprint notes in
+`MASTER_PLAN.md`.
+
+| Shell | ARD Rows | Table Rows | Warnings | Notes |
+|-------|----------|------------|----------|-------|
+| T-DM-01 | 72 | 16 | 0 | |
+| T-DS-01 | 72 | 13 | 0 | |
+| T-AE-01 | 56 | 9 | 0 | |
+| T-AE-02 | 1334 | 276 | 0 | pivot_wider render warning resolved; table rows 69→276 |
+| T-LB-01 | 1344 | 84 | 0 | NA min/max fix verified — 0 -Inf values in ARD |
+| T-LB-02 | 216 | 45 | 0 | |
+
+### Template source vs renv differences
+
+The renv-installed templates were pre-expanded snapshots; source templates are
+prototypes that Mode 3 expansion resolves at `hydrate()` time. Key differences:
+
+- **T-LB-01**: Source template has 4 arms (A, B, C, Total) → 224 analyses / 1344
+  ARD rows. Renv template had 3 arms (no Total) → 168 analyses / 1008 ARD rows.
+  Table row count (84) is unchanged. NA min/max fix (stdlib.R) eliminates the
+  former -Inf values for empty-data cells; confirmed 0 -Inf/Inf entries in ARD.
+- **T-AE-02**: Source template generates 230 PT groups from `adae_teae`. The
+  prior `pivot_wider` duplicate warning and truncated 69-row output are resolved;
+  render now produces 276 table rows with 0 warnings.
+
+Test suites: arscore ✓ (1343), arsshells ✓ (552), arsresult ✓ (272, 1 expected warning),
+arstlf ✓ (112), ars ✓ (54 pass + 16 expected-warn, 0 failures). **Total: 0 failures.**
