@@ -1,7 +1,7 @@
 # arsworks — Known Issues and Gaps
 
 **Maintained by:** Lovemore Gakava  
-**Last updated:** 2026-02-26  
+**Last updated:** 2026-02-28  
 **Scope:** Issues confirmed against the live codebase; workarounds in place unless marked otherwise.
 
 Each entry is tagged:
@@ -61,19 +61,19 @@ The CDISC schema uses `additionalProperties: false`, so these fields cause Layer
 
 ## 2. arsresult Design Constraints
 
-### 2.1 Component scalar rows in the ARD exceed the method's declared operations  `[DESIGN]`
+### 2.1 Component scalar rows in the ARD exceed the method's declared operations  `[BUG-FIXED]`
 
-**Context:** `METH_CONT::OP_MEAN_SD` is registered as a single operation but its implementation returns three named values: `OP_MEAN`, `OP_SD`, `OP_MEAN_SD`. Similarly, `OP_RANGE` returns `OP_MIN`, `OP_MAX`, `OP_RANGE`. `arsresult::run()` appends the extra "component scalars" (OP_MEAN, OP_SD, OP_MIN, OP_MAX) to `analysis@results` and to the ARD.
+**Resolved by §21 flat operations refactor (2026-02-28).**
 
-**Why:** `arstlf`'s `frmt_combine()` reads OP_MEAN and OP_SD as separate values to assemble the composite formatted cell "xx.x (xx.x)". Without them in the ARD, rendering fails.
+`OP_MEAN_SD` and `OP_RANGE` composite operations have been removed from `METH_CONT`.
+Every scalar that the method produces (`OP_MEAN`, `OP_SD`, `OP_MIN`, `OP_MAX`, `OP_COUNT`,
+`OP_MEDIAN`) is now a formally declared operation. The ARD contains only declared
+operation IDs; `validate_reporting_event()` accepts the embedded results without filtering.
 
-**Consequence:** The ARD contains operation_ids that are not declared operations in the method. Any code that re-embeds ARD rows into `analysis@results` for validation will fail `validate_reporting_event()` unless it filters to formal operation IDs first.
-
-**Workaround in `ars_explorer.R`:** `.embed_ard_into_re()` pre-filters the ARD to formal operation IDs (those declared in `re@methods`) before building `ars_operation_result` objects.
-
-**Longer-term options:**
-- Tag component scalar rows in the ARD with a column (e.g., `is_component = TRUE`) so consumers can filter reliably without re-deriving the method's operation list.
-- Or register OP_MEAN, OP_SD, OP_MIN, OP_MAX as explicit sub-operations in the method definition, which would then be valid operation_ids in the results. This is a larger API change.
+The `.embed_ard_into_re()` pre-filter in `ars_explorer.R` has been removed; the comment
+confirms "No pre-filter is needed". `arstlf` composes display cells at render time via
+`frmt_combine()` keyed on the flat anchor ops (`OP_MEAN` → "mean (SD)", `OP_MIN` →
+"min, max") using the `.combined_ops` registry in `prep_ard.R`.
 
 ---
 
@@ -151,9 +151,13 @@ Any Layer 2 failure **not** in the above list represents a genuine structural pr
 Analysis 'AN_XXX': result operation_id 'OP_MEAN' not found in any method's operations
 ```
 
-**Cause:** Component scalar rows (§2.1) present in ARD were embedded into the reporting event before filtering. Seen when `.embed_ard_into_re()` did not filter to formal operations.
+**Cause:** Component scalar rows (§2.1) present in ARD were embedded into the reporting
+event before filtering. Seen when `.embed_ard_into_re()` did not filter to formal operations.
 
-**Status:** Fixed. `.embed_ard_into_re()` now pre-filters. This entry is retained as a diagnostic guide.
+**Status:** Fully resolved by §21 flat ops refactor (2026-02-28). All METH_CONT scalars
+are now formally declared operations; no undeclared rows are ever produced. The pre-filter
+in `.embed_ard_into_re()` has been removed entirely — it is no longer needed.
+This entry is retained as a diagnostic guide.
 
 ---
 
@@ -161,8 +165,8 @@ Analysis 'AN_XXX': result operation_id 'OP_MEAN' not found in any method's opera
 
 | ID | Package | Description | Severity |
 |----|---------|-------------|----------|
-| OI-01 | arstlf | `OP_MEAN_SD` formatted value is the mean only, not "mean (SD)" composite string. Downstream formatting relies on component scalars + `frmt_combine()`. | Medium |
+| ~~OI-01~~ | ~~arstlf~~ | ~~`OP_MEAN_SD` formatted value is the mean only~~ | ~~Medium~~ | **RESOLVED** — `OP_MEAN_SD` removed by §21 refactor; `frmt_combine(OP_MEAN, OP_SD)` renders "xx.x (xx.x)" correctly. |
 | OI-02 | arsresult | Numeric coercion in `.extract_values()` silently converts string comparator values (e.g., `"3"`) to numeric. Type errors are suppressed. | Medium |
 | OI-03 | arscore | Duplicate IDs in a reporting event silently overwrite earlier entries in lookups. `validate_reporting_event()` does not check for ID uniqueness. | Low |
-| OI-04 | arsshells | `validate_shell()` does not call `validate_reporting_event()` internally; the full referential integrity chain is not checked at shell load time. | Medium |
+| ~~OI-04~~ | ~~arsshells~~ | ~~`validate_shell()` does not call `validate_reporting_event()` internally~~ | ~~Medium~~ | **RESOLVED** — `validate_shell()` now checks the full reference chain: `analysis_set_id`, `data_subset_id`, `ordered_groupings` (grouping_id + group_id), and all `ShellCell` refs. |
 | OI-05 | arstlf | RTF/PDF export quality from the tfrmt backend is untested. HTML is reliable; RTF needs audit before production use. | Medium |
