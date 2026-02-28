@@ -1,5 +1,5 @@
 # arsworks MASTER PLAN
-**Date:** 2026-02-22 (updated 2026-02-28, Phase C **COMPLETE** — test hardening + performance fixes 2026-02-28)  
+**Date:** 2026-02-22 (updated 2026-02-28, Phase C **COMPLETE** — test hardening + performance fixes 2026-02-28; §22 UAT added 2026-02-28)  
 **Author:** Lovemore Gakava  
 **Status:** ACTIVE  
 **Scope:** arscore, arsshells, arsresult, arstlf, ars (tests + docs in each)  
@@ -267,11 +267,12 @@ Two new unit tests in `arsresult/tests/testthat/test-run.R` targeting the
 
 | Priority | Item | Notes |
 |----------|------|-------|
-| **1** | **New template batch** (T-VS-01, T-AE-03, T-AE-04, T-AE-05, T-EF-01, T-EX-01) | All blockers resolved; highest-leverage work — each new template validates the framework against different data shapes (ADVS, ADEX, ADEFF) |
-| **2** | **`gt` backend in arstlf** | High priority in §20; removes tfrmt dependency for direct gt assembly |
-| **3** | ~~**§21 composite ops refactor**~~ | ✅ **COMPLETE** — verified 2026-02-28. All flat ops in place across stdlib.R, templates, prep_ard.R, render_tfrmt.R, and ars_explorer.R. |
-| **4** | `resultsByGroup: false` for comparison analyses | Enables p-value/ANOVA methods (Chi-sq, Fisher exact) |
-| **5** | `referencedOperationRelationships` formal denominator | Needed for strict ARS JSON consumers |
+| **1** | **§22 User Acceptance Testing (UAT)** | High priority — blank/NA rendering inconsistency fix, full-dataset ADLB performance, end-to-end output review across all 6 shells. See §22. |
+| **2** | **New template batch** (T-VS-01, T-AE-03, T-AE-04, T-AE-05, T-EF-01, T-EX-01) | All blockers resolved; highest-leverage work — each new template validates the framework against different data shapes (ADVS, ADEX, ADEFF) |
+| **3** | **`gt` backend in arstlf** | High priority in §20; removes tfrmt dependency for direct gt assembly |
+| **4** | ~~**§21 composite ops refactor**~~ | ✅ **COMPLETE** — verified 2026-02-28. All flat ops in place across stdlib.R, templates, prep_ard.R, render_tfrmt.R, and ars_explorer.R. |
+| **5** | `resultsByGroup: false` for comparison analyses | Enables p-value/ANOVA methods (Chi-sq, Fisher exact) |
+| **6** | `referencedOperationRelationships` formal denominator | Needed for strict ARS JSON consumers |
 
 ### Parking lot — resolved items
 
@@ -1522,3 +1523,142 @@ rather than expecting pre-composed operation IDs.
 - Any existing integration tests that assert on ARD column counts or operation
   ID sets will need updating — run the full test suite across all packages after
   the change.
+
+---
+
+## 22. User Acceptance Testing (UAT)
+
+**Added:** 2026-02-28  
+**Priority:** High (Priority 1 in NEXT SESSION table)
+
+Three interlocking concerns identified during output review:
+
+1. **Missing-category display inconsistency** — the literal string `"NA"` appears in
+   some rendered cells instead of a blank.
+2. **Forced small-dataset scoping** — `adlb_lb01` (7 PARAMCDs) and `adlb_lb02`
+   (3 PARAMCDs) exist as performance workarounds; the underlying run loop should be
+   fast enough for full ADLB (47 PARAMCDs).
+3. **End-to-end output correctness** — structured review of all 6 shells against
+   clinical expectations.
+
+---
+
+### §22.1 — Diagnose and fix blank vs "NA" rendering inconsistency
+
+#### Root cause candidates
+
+| Source | Mechanism | Symptom |
+|--------|-----------|---------|
+| `stdlib.R` scalar fns on empty data | `mean(numeric(0), na.rm=TRUE)` → `NaN` stored as `"NaN"` in raw_value | `"NaN"` or `"NA"` in cell |
+| `prep_ard.R` zero-row filter | `return(NULL)` → row absent from tfrmt input | Correct blank ✓ |
+| tfrmt `frmt("xx.x")` on numeric `NA` | tfrmt renders blank | Correct blank ✓ |
+| `raw_value = "NA"` string in non-combined format | tfrmt may emit literal `"NA"` if frmt doesn't absorb it | **Likely culprit** |
+
+#### Steps
+
+1. Run `data_table_examples.R` end-to-end; capture all 6 gt tables; flag any cell
+   containing `"NA"`, `"NaN"`, or unexpected blank.
+2. For each flagged cell, filter the ARD to the originating `raw_value` to determine
+   whether `"NA"` is arriving as character string vs. numeric `NA_real_`.
+3. Audit stdlib edge cases: `OP_SD` (n=1 → `NA` ✓), `OP_MEAN`/`OP_MEDIAN`/`OP_MIN`/
+   `OP_MAX` (n=0 → `NA_real_` ✓). Verify `NaN` cannot reach `raw_value`.
+4. Audit `prep_ard.R` value path: confirm `as.numeric("NA")` / `as.numeric("NaN")`
+   → `NA_real_` propagates cleanly to tfrmt with no literal text leaking.
+5. **Fix:** Add `NaN → NA_real_` guard in `stdlib.R` or `run.R` before `raw_value`
+   is written. Add regression tests in `arstlf/tests/` for n=0 and n=1 cells.
+
+#### Deliverables
+
+- [ ] Root cause identified and documented here
+- [ ] Guard added + regression test (package: arstlf or arsresult)
+- [ ] All 6 rendered tables free of `"NA"` / `"NaN"` text
+
+---
+
+### §22.2 — Full-dataset performance: remove forced scoping
+
+#### Current state
+
+| Dataset | PARAMCDs | Analyses | Time | Speedup |
+|---------|----------|----------|------|---------|
+| Full ADLB | 47 | 1504–1692 | 2–3.5 min | baseline |
+| `adlb_lb01` | 7 | 224 | 5.3 s | 28× |
+| `adlb_lb02` | 3 | 108 | 1.8 s | 117× |
+
+The `.observed_combos()` fast path exists (added in the observed-combos sprint) but
+the full 47-PARAMCD ADLB still hits 2–3.5 min, suggesting either the fast path is not
+firing, or the loop body itself is the bottleneck.
+
+#### Investigation
+
+Profile T-LB-01 on full `adlb`:
+
+```r
+Rprof(tmp <- tempfile())
+run(sh_lb01, adam = list(ADLB = adlb, ADSL = adsl))
+Rprof(NULL); summaryRprof(tmp)
+```
+
+Hypotheses (in order of likelihood):
+
+| Hypothesis | Mitigation |
+|------------|------------|
+| `.observed_combos()` not firing — Cartesian fallback due to orphan PARAMCDs or non-EQ conditions | Audit fast-path conditions; remove orphans or fix template |
+| Fast path fires but loop body slow (1500+ analyses × 6 ops) | Vectorise filter-and-count; consider `data.table` or `dtplyr` |
+| ADSL denominator re-filtered per analysis (1500 redundant calls) | Memoize: compute denom once per unique `(analysis_set_id, group_combo)` |
+
+#### Target
+
+Full 47-PARAMCD ADLB completes T-LB-01 in **< 30 seconds** (currently 2–3.5 min).
+
+#### Deliverables
+
+- [ ] Profiling results documented here
+- [ ] Root cause fixed in `arsresult/R/run.R`
+- [ ] T-LB-01 benchmark on full ADLB passes 30 s target
+- [ ] `data_table_examples.R` updated to use full `adlb` (pre-scoping retained as
+  semantic option, not performance requirement)
+- [ ] Performance regression test added to arsresult
+
+---
+
+### §22.3 — End-to-end UAT review (all 6 shells)
+
+#### Review checklist (per shell)
+
+| Check | Pass criteria |
+|-------|---------------|
+| Row count | Matches hand-counted expectation from clinical spec |
+| Column N headers | Show actual N values, not `"N=xx"` placeholder |
+| All expected categories present | Shell sections fully reflected in rendered rows |
+| No `"NA"` / `"NaN"` text in cells | String scan of gt object |
+| Zero-count cells show `"0"` not blank (where appropriate) | Frequency rows for arms with no events |
+| Percentages suppressed when N=0 (shows `"0"` not `"0 (0.0%)"`) | AE and disposition tables |
+| Totals / subtotals arithmetically consistent | Spot check |
+| Section headers / indentation correct | Visual review |
+
+#### Shell-specific focus
+
+| Shell | Key UAT focus |
+|-------|---------------|
+| T-DM-01 | SD undefined for n=1 subjects → should be blank not `"NA"` |
+| T-DS-01 | All disposition categories present even at 0 count |
+| T-AE-01 | Value-map override (AEREL/AEACN) produces expected counts |
+| T-AE-02 | All SOCs represented; zero-event SOC/PT rows show `"0"` |
+| T-LB-01 | Baseline vs. CHG rows clearly distinguished; NaN guards active |
+| T-LB-02 | Shift categories (Low/Normal/High) complete across all arms |
+
+#### Deliverables
+
+- [ ] UAT checklist completed for all 6 shells; results recorded in this section
+- [ ] All defects captured as sub-items under §22.1 or new issues
+
+---
+
+### §22.4 — Execution order
+
+1. ✅ MASTER_PLAN.md updated (this section + priority table) — 2026-02-28
+2. [ ] §22.3 — Run all 6 shells; complete UAT checklist
+3. [ ] §22.1 — Diagnose and fix blank/NA rendering; add regression tests
+4. [ ] §22.2 — Profile T-LB-01 on full ADLB; implement fix; update examples
+5. [ ] Commit and push all affected packages; confirm test suites green
