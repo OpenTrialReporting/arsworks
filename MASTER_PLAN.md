@@ -223,10 +223,35 @@ column and builds `section_map` entries automatically.
 - Mode 3: distinct PARAMCD values derived from adam
 - Mode 3: no `__PARAM__` strings remain after expansion
 
-**All 2329 tests pass (arscore 1335, arsshells 552, arsresult 235, arstlf 112,
+**All 2360 tests pass (arscore 1335, arsshells 552, arsresult 266, arstlf 112,
 ars 95). 0 failures, 1 skip (group ID sanitisation). Test fixes: cli line-wrap
 regex hardening, `__NONE__` → `NA` sentinel fix, T-AE-02 transpile test updated,
 pipe tests rewritten with proper data-driven hydration.**
+
+### ✅ Fast-path expand tests added to arsresult — 2026-02-28
+
+Two new unit tests in `arsresult/tests/testthat/test-run.R` targeting the
+`.observed_combos()` fast path:
+
+- **Test 6** `"fast path: observed_combos yields same ARD as Cartesian when all
+  declared group combos have data"` — 2 TRT × 2 SOC dataset with all 4 cross-combos
+  present; asserts `.observed_combos()` is non-NULL, length equals
+  `.cartesian_product()`, group-ID signatures match, and ARD has 4 rows with n=1
+  per cell.
+
+- **Test 7** `"fast path: Total group on one factor produces EQ + Total combo
+  variants"` — mirrors the T-AE-02 production pattern (GRP_TRT with EQ + is_total
+  groups, GRP_SOC with EQ groups); asserts `.observed_combos()` powerset enumeration
+  produces 6 combos (4 EQ + 2 Total), Total appears in exactly 2 combos, and ARD
+  has correct n per cell (n=1 per arm/SOC, n=2 for Total/SOC).
+
+- **Test 8** `"Cartesian fallback: orphaned SOC emits zero-count rows; TRT group
+  recorded, SOC group absent"` — GRP_SOC declares Nervous with no matching data;
+  `.observed_combos()` returns NULL (Cartesian active); ARD has 6 rows (2×3);
+  covered combos have n=1; Nervous combos have n=0 with `group_id_1 = NA` because
+  the SOC filter returns 0 rows causing the fi-loop to fire `next` before appending
+  the SOC group; TRT group is recorded in the unnumbered `group_id` column
+  (`create_ard.R:64` uses no suffix when `length(result_groups) == 1`).
 
 ### Bug fix — `template_key` not preserved through Phase 2/3 group expansion
 
@@ -281,7 +306,7 @@ ars        ← Orchestrator: pipe-friendly workflow API, selective re-exports
 |---------|---------|-------|--------|
 | arscore | v0.1.0 | 1335 pass | ✅ All tasks complete; `validate_ordered_groupings` reference check added (Task 4) |
 | arsshells | v0.1.0 | 552 pass | ✅ Phase A1–A7 + Phase B1–B7 complete; T-LB-01/02 refactored to prototypes; section_map (Mode 2+3) in hydrate(); test fixtures updated for `__NONE__` → `NA` sentinel fix and cli line-wrap regex hardening |
-| arsresult | v0.1.0 | 235 pass (1 expected warn) | ✅ Phase A8–A11 complete; `dataSubsetId` filter confirmed working (Task 1); flat ops registered (Task 2); `resultsByGroup=TRUE` expand path implemented (commit c4e609c); transpile test updated for T-AE-02 template restructure (DS_TEAE simple condition) |
+| arsresult | v0.1.0 | 257 pass (1 expected warn) | ✅ Phase A8–A11 complete; `dataSubsetId` filter confirmed working (Task 1); flat ops registered (Task 2); `resultsByGroup=TRUE` expand path implemented (commit c4e609c); transpile test updated for T-AE-02 template restructure (DS_TEAE simple condition); +2 fast-path tests (Test 6: all-combos equivalence; Test 7: Total-group powerset) |
 | arstlf | v0.1.0 | 112 pass | ✅ Task 5 complete; 3 tests updated for flat ops refactor; `expect_error` regexes hardened against cli line-wrapping |
 | ars | v0.1.0 | 95 pass (1 skip) | ✅ Task 6 complete; `setup.R` path fixed + `run`/`render` shadowing fix; test-pipe.R rewritten with proper data-driven hydration; integration T-AE-02 fixtures updated; **Phase C complete** — bundled datasets, `R/data.R`, `LazyData: true`, README Quick Start, getting-started vignette |
 
@@ -960,7 +985,7 @@ Step A12: All        — tests and docs for Phase A                             
 ```
 Step B1: arsshells  — add template_key to ShellSection class              ✅ DONE
 Step B2: arsshells  — refactor T-LB-01/02 JSONs to prototype sections     ✅ DONE
-Step B3: arsshells  — refactor T-AE-02 JSON to prototype SOC section           ⏳ UNBLOCKED — `resultsByGroup:true` now implemented in arsresult (commit c4e609c)
+Step B3: arsshells  — refactor T-AE-02 JSON to prototype SOC section           ✅ DONE — template has `templateKey: "AEBODSYS"` prototype section; Mode 3 section expansion tested in test-hydrate.R B3 suite (8 tests)
 Step B4: arsshells  — refactor T-DM-01 Race section to template section        (deferred — Race is already Mode 3 via adam)
 Step B5: arsshells  — implement Phase 6: section_map (Mode 2) in hydrate() ✅ DONE
 Step B6: arsshells  — implement Mode 3 section resolution (adam arg)       ✅ DONE

@@ -70,61 +70,61 @@ All components of the flat operations refactor (§21) are in place and verified:
 - **`arstlf/R/render_tfrmt.R`**: `frmt_combine()` keyed on `OP_MIN` and `OP_MEAN`.
 - **`ars_explorer.R`**: `.embed_ard_into_re()` pre-filter removed; no longer needed.
 
-T-LB-01 end-to-end: 1,344 ARD rows, ops = `{OP_COUNT, OP_MAX, OP_MEAN, OP_MEDIAN,
-OP_MIN, OP_SD}`, renders to `gt_tbl` cleanly. Full suite: 2,262 expectations, 0 failures.
+---
+
+## Observed-combos fast path — COMPLETE (2026-02-28)
+
+`arsresult/R/run.R` expand path now uses `.observed_combos()` before falling back to
+`.cartesian_product()`. Significant speedup for large AE and lab tables.
+
+### Decision logic
+
+`.observed_combos()` returns a combo list (fast path) when all of these hold:
+- Every expand factor has `grouping_variable` present in `base_data`
+- All non-Total groups use simple EQ conditions
+- Every declared EQ group value is present in `base_data` (no orphans)
+
+Returns `NULL` → Cartesian fallback when any condition fails.
+
+### T-AE-02 production requirement
+
+**Pre-filter ADAE to TEAE rows before `hydrate()` / `run()`.** The full `adae` includes
+non-TEAE rows; Mode 3 expansion derives PT groups from those rows too, creating ~12 orphan
+PTs that are absent from `base_data` after the TRTEMFL filter. Those orphans trigger the
+Cartesian fallback (~96 s, 21,160 combos). Pre-filtering ensures all derived PT groups are
+actually observed, activating the fast path (~4 s, ~230 combos).
+
+```r
+adae_teae <- adae[!is.na(adae$TRTEMFL) & adae$TRTEMFL == "Y", ]
+hydrate(..., adam = list(ADAE = adae_teae, ADSL = adsl))
+run(adam = list(ADAE = adae_teae, ADSL = adsl))
+```
+
+### ARD column-naming quirk for orphaned-group rows
+
+When the Cartesian path processes an orphaned combo (e.g. TRT=A × SOC=Nervous with no
+Nervous TEAEs), the fi-loop fires `next` before appending the SOC group to
+`combo_result_groups`. The result has only 1 result_group (the TRT group).
+
+`arscore::create_ard()` (`create_ard.R:64`) uses **no suffix** when
+`length(result_groups) == 1`, so the TRT group lands in the **unnumbered** `group_id` /
+`grouping_id` columns, not `group_id_1`. Zero-count rows therefore have:
+
+```
+group_id_1  = NA        # no _1 result_group
+group_id    = "GRP_A"   # TRT group in unnumbered column
+group_id_2  = NA        # SOC never appended
+raw_value   = "0"
+```
 
 ---
 
-## Recent Changes (2026-02-28)
+## End-to-end validation (2026-02-28)
 
-### Fix: Empty-data guards in `arsresult/R/stdlib.R`
+All 6 shells clean (hydrate → run → render). Full sprint notes in `MASTER_PLAN.md`.
 
-`.fn_min()`, `.fn_max()`, and `.fn_median()` previously called `min()`/`max()`/`median()`
-with `na.rm = TRUE` on vectors that could be empty or all-NA after data filtering. This
-produced repeated warnings (`"no non-missing arguments to min; returning Inf"`) and
-`Inf`/`-Inf` values in the ARD.
-
-**Fix:** Each function now checks `length(non_na) > 0` before calling the base function,
-returning `NA_real_` for empty inputs.
-
-```r
-# Example (same pattern for .fn_max and .fn_median)
-.fn_min <- function(data, analysis) {
-  vals <- data[[analysis@variable]]
-  non_na <- vals[!is.na(vals)]
-  c(OP_MIN = if (length(non_na) > 0) min(non_na) else NA_real_)
-}
-```
-
-### Fix: Pre-run zero-row skip in `arsresult/R/run.R`
-
-`.compute_analysis()` now skips analyses early when filtered data has zero rows, avoiding
-unnecessary method calls on empty data. Two guards were added in the **expand path** only
-(the pin path is left unguarded so that `METH_FREQ` correctly returns 0 for empty subsets):
-
-1. **Base-data skip (expand path):** After applying the data subset filter to `base_data`,
-   if `nrow(base_data) == 0`, the analysis is skipped entirely with a `cli_alert_warning`.
-
-2. **Per-combo skip (expand path):** After applying group filters within the Cartesian
-   product loop, if `nrow(combo_data) == 0`, that combination is skipped via `next`.
-
-**Root cause:** The T-LB-01 shell template defines analyses for 47 lab parameters, but
-the ADLB data only contains 7. The 40 missing parameters produce empty filtered datasets.
-After hydration with `adam`, Mode 3 expansion limits to only the parameters present in
-the data (7), so the issue only manifests when running against a shell hydrated without
-data-driven expansion (e.g. the original 47-parameter shell).
-
-**Impact:** For the original 47-parameter T-LB-01 shell, 1,280 of 1,504 analyses are now
-skipped cleanly (zero warnings, zero Inf/-Inf values). All 4 package test suites pass
-(the pin-path guard was intentionally omitted to preserve the `SEX == "X" → count 0` test
-in `arsresult/tests/testthat/test-run.R`).
-
-### Validation (2026-02-28)
-
-All 6 shells tested end-to-end (hydrate → run → render):
-
-| Shell | ARD Rows | Table Rows | min/max Warnings |
-|-------|----------|------------|------------------|
+| Shell | ARD Rows | Table Rows | Warnings |
+|-------|----------|------------|----------|
 | T-DM-01 | 72 | 16 | 0 |
 | T-DS-01 | 72 | 13 | 0 |
 | T-AE-01 | 56 | 9 | 0 |
@@ -132,4 +132,5 @@ All 6 shells tested end-to-end (hydrate → run → render):
 | T-LB-01 | 1008 | 84 | 0 |
 | T-LB-02 | 216 | 45 | 0 |
 
-Test suites: arscore ✓, arsshells ✓, arsresult ✓ (1 expected warning), arstlf ✓
+Test suites: arscore ✓ (1335), arsshells ✓ (552), arsresult ✓ (266, 1 expected warning),
+arstlf ✓ (112), ars ✓ (95). **Total: 2360 expectations, 0 failures.**
