@@ -166,7 +166,7 @@ This entry is retained as a diagnostic guide.
 | ID | Package | Description | Severity |
 |----|---------|-------------|----------|
 | ~~OI-01~~ | ~~arstlf~~ | ~~`OP_MEAN_SD` formatted value is the mean only~~ | ~~Medium~~ | **RESOLVED** — `OP_MEAN_SD` removed by §21 refactor; `frmt_combine(OP_MEAN, OP_SD)` renders "xx.x (xx.x)" correctly. |
-| OI-02 | arsresult | Numeric coercion in `.extract_values()` silently converts string comparator values (e.g., `"3"`) to numeric. Type errors are suppressed. | Medium |
+| ~~OI-02~~ | ~~arsresult~~ | ~~Numeric coercion in `.extract_values()` silently converts string comparator values to numeric. Type errors are suppressed.~~ | ~~Medium~~ | **RESOLVED** — `GT`/`GE`/`LT`/`LE` now pass `numeric_required = TRUE` to `.extract_values()`; a non-numeric value raises `cli_abort`. String fall-back is still silent for `EQ`/`NE`/`IN`/`NOTIN`. |
 | OI-03 | arscore | Duplicate IDs in a reporting event silently overwrite earlier entries in lookups. `validate_reporting_event()` does not check for ID uniqueness. | Low |
 | ~~OI-04~~ | ~~arsshells~~ | ~~`validate_shell()` does not call `validate_reporting_event()` internally~~ | ~~Medium~~ | **RESOLVED** — `validate_shell()` now checks the full reference chain: `analysis_set_id`, `data_subset_id`, `ordered_groupings` (grouping_id + group_id), and all `ShellCell` refs. |
 | OI-05 | arstlf | RTF/PDF export quality from the tfrmt backend is untested. HTML is reliable; RTF needs audit before production use. | Medium |
