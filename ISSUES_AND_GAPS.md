@@ -170,3 +170,181 @@ This entry is retained as a diagnostic guide.
 | ~~OI-03~~ | ~~arscore~~ | ~~Duplicate IDs in a reporting event silently overwrite earlier entries in lookups.~~ | ~~Low~~ | **RESOLVED** — `validate_reporting_event()` now checks all 7 top-level collections (analyses, methods, analysis_sets, data_subsets, analysis_groupings, outputs, reference_documents), operation IDs within each method, and group IDs within each grouping factor. Duplicates are collected with all other referential integrity errors and reported together. |
 | ~~OI-04~~ | ~~arsshells~~ | ~~`validate_shell()` does not call `validate_reporting_event()` internally~~ | ~~Medium~~ | **RESOLVED** — `validate_shell()` now checks the full reference chain: `analysis_set_id`, `data_subset_id`, `ordered_groupings` (grouping_id + group_id), and all `ShellCell` refs. |
 | OI-05 | arstlf | RTF/PDF export quality from the tfrmt backend is untested. HTML is reliable; RTF needs audit before production use. | Medium |
+| ~~OI-06~~ | ~~arsresult / arsshells~~ | ~~`referencedOperationRelationships` not declared on percentage operations — denominator linkage invisible to the ARS model.~~ | ~~Medium~~ | **RESOLVED** — Declared in all 4 templates; `AN_HDR_N` denominator analysis added to each. See below. |
+| OI-07 | arsresult / arscore | `resultsByGroup: false` pattern not supported — blocks all CSD comparison methods (Chi-sq, ANOVA, Fisher exact). See below. | Medium |
+| ~~OI-08~~ | ~~arsresult~~ | ~~`dataSubsetId` filtering in `run()` unverified — may be silently ignored for some analysis patterns.~~ | ~~Medium~~ | **RESOLVED** — Implemented and tested in both paths. See below. |
+
+---
+
+## 6. Open Issues — Detail
+
+### ~~OI-06~~ — `referencedOperationRelationships` not declared on `%` operations  `[BUG-FIXED]`
+
+**Resolved 2026-02-28.**
+
+All four affected templates updated. arscore model was already complete; this was purely template JSON work.
+
+**Affected packages:** `arsresult`, `arsshells`
+
+**Description:**  
+The CSD method `Mth01_CatVar_Summ_ByGrp` formally declares the numerator/denominator
+relationship for its percentage operation via `referencedOperationRelationships`:
+
+```json
+{
+  "referencedOperationRelationships": [
+    {
+      "referencedOperationRole": "NUMERATOR",
+      "operationId": "Mth01_CatVar_Summ_ByGrp_2_n",
+      "analysisId": null
+    },
+    {
+      "referencedOperationRole": "DENOMINATOR",
+      "operationId": "Mth01_CatVar_Count_ByGrp_1_n",
+      "analysisId": "AN_HDR_TRT"
+    }
+  ]
+}
+```
+
+`METH_AE_FREQ` (and any other method that computes a percentage) currently
+hard-codes the denominator inside the R stdlib function. The relationship is
+invisible to the ARS model: no `referencedOperationRelationships` are declared
+in the method, and the templates do not carry these fields on the `%` / `pct`
+operation cells.
+
+**Impact:**  
+- Strict ARS consumers (e.g., CDISC validators checking referential integrity on
+  operation relationships) will find no declared linkage and cannot verify
+  percentage correctness from the JSON alone.
+- JSON will not fully round-trip against conformant ARS viewers that display
+  denominator provenance.
+
+**CSD structure (verified against `Common Safety Displays.json` line 1594):**  
+
+Two separate declarations are required:
+
+*On the method's operation* (shared template for all analyses using the method):
+```json
+{
+  "id": "OP_N_PCT",
+  "referencedOperationRelationships": [
+    { "id": "ROR_NPCT_NUM", "referencedOperationRole": { "controlledTerm": "NUMERATOR" },
+      "operationId": "OP_N" },
+    { "id": "ROR_NPCT_DEN", "referencedOperationRole": { "controlledTerm": "DENOMINATOR" },
+      "operationId": "OP_N" }
+  ]
+}
+```
+Both point to `OP_N`; the difference is resolved per-analysis via `referencedAnalysisOperations`.
+
+*On each analysis* (resolves abstract ROR IDs to concrete analysis IDs):
+```json
+"referencedAnalysisOperations": [
+  { "referencedOperationRelationshipId": "ROR_NPCT_NUM", "analysisId": "<this analysis>" },
+  { "referencedOperationRelationshipId": "ROR_NPCT_DEN", "analysisId": "AN_HDR_N" }
+]
+```
+
+**Current state across installed templates:**
+
+| Template | Method | NUMERATOR ROR | DENOMINATOR ROR | `referencedAnalysisOperations` |
+|---|---|:---:|:---:|:---:|
+| T-AE-02 | METH_AE_FREQ | ✅ `ROR_NPCT_NUMERATOR` | ❌ | ❌ |
+| T-AE-01 | METH_AE_FREQ | ❌ | ❌ | ❌ |
+| T-DM-01 | METH_CAT | ❌ | ❌ | ❌ |
+| T-DS-01 | METH_FREQ | ❌ | ❌ | ❌ |
+
+**arscore model:** Fully supports this — `ars_referenced_operation_relationship`,
+`ars_referenced_analysis_operation`, and the Layer 1 validator (`validate_reporting_event()`)
+are all in place. This is **template JSON work only** — no code changes needed.
+
+**Needed changes (three per template):**  
+1. **Method block** — add NUMERATOR + DENOMINATOR RORs to `OP_N_PCT` in each
+   method (`METH_AE_FREQ`, `METH_CAT`, `METH_FREQ`).
+2. **New header-count analysis** (`AN_HDR_N`) — each template needs an explicit
+   analysis that computes `OP_N` per arm in the analysis set. This is the CSD
+   denominator analysis (c.f. `An01_05_SAF_Summ_ByTrt` in CSD). Currently the
+   column N is computed as an internal side-channel (`analysis_set_n`) in
+   `run()`. Adding it as a first-class analysis makes it visible in the ARD.  
+   ⚠️ Once added, check `arstlf` N=xx header resolution does not double-count.
+3. **Per-analysis wiring** — every analysis with `OP_N_PCT` gets
+   `referencedAnalysisOperations`: NUMERATOR → self, DENOMINATOR → `AN_HDR_N`.
+
+**Effort by template:**
+
+| Template | Analyses with OP_N_PCT | Changes needed |
+|---|:---:|---|
+| T-AE-01 | 7 | Add RORs to method + `AN_HDR_N` + wire 7 analyses |
+| T-AE-02 | 2 | Add DENOMINATOR ROR + `AN_HDR_N` + wire 2 analyses |
+| T-DM-01 | 2 | Add RORs to method + `AN_HDR_N` + wire 2 analyses |
+| T-DS-01 | 8 | Add RORs to method + `AN_HDR_N` + wire 8 analyses |
+
+**Tracking:** `MASTER_PLAN.md §20` (arsresult backlog).
+
+---
+
+### OI-07 — `resultsByGroup: false` pattern not supported  `[DEFERRED]`
+
+**Affected packages:** `arsresult`, `arscore`
+
+**Description:**  
+CSD defines three comparison methods that use `resultsByGroup: false` on all
+groupings and emit a **single** result whose `resultGroups` carry only a
+`groupingId` (no `groupId`):
+
+| CSD Method ID | Description |
+|---|---|
+| `Mth03_CatVar_Comp_PChiSq` | Pearson Chi-square p-value |
+| `Mth04_ContVar_Comp_Anova` | One-way ANOVA p-value |
+| `Mth05_CatVar_Comp_FishEx` | Fisher exact test p-value |
+
+Current blockers:  
+- `arsresult::run()` always writes a `groupId` on every result row; the
+  no-`groupId` result pattern is not handled.  
+- `ars_operation_result` (arscore S7 class) requires `groupId` to be non-empty
+  in each `resultGroup`; it must be made optional (`default = ""`).  
+- `stdlib.R` has no comparison methods; Chi-square, ANOVA, and Fisher exact
+  functions need to be added.  
+- `arstlf` render path assumes each result row maps to an arm column;
+  a single-row comparison result (p-value) needs a separate tfrmt / gt
+  geometry.
+
+**Impact:**  
+No p-value or inferential comparison analyses can be produced until this is
+resolved. All CSD tables that include a p-value column (T-DM-01, T-AE-03,
+efficacy tables) are structurally incomplete.
+
+**Tracking:** `MASTER_PLAN.md §20` (arsresult backlog).
+
+---
+
+### ~~OI-08~~ — `dataSubsetId` filtering in `arsresult::run()`  `[BUG-FIXED]`
+
+**Resolved by code inspection and test verification — 2026-02-28.**
+
+Both execution paths in `arsresult/R/run.R` apply `data_subset_id` filtering
+correctly:
+
+- **PIN path** (`run.R` lines 441–451): `analysis@data_subset_id` is looked up
+  in `ds_index`, transpiled via `.filter_data_subset()`, and applied to `data`
+  before `_call_method_once` is called. If the subset ID is not found, a
+  `cli_warn()` is emitted and the analysis is skipped (not silently ignored).
+
+- **Expand path** (`run.R` lines 504–514): Same lookup and filter applied to
+  `base_data` before the combo loop. An additional early-return guard fires if
+  the filtered `base_data` has zero rows (line 518).
+
+**Test coverage:**
+
+- `test-run.R:420` — "dataSubsetId filter is applied: zero-row subset yields
+  count of 0": PIN path; `DS_SEX_X` (`SEX == "X"`) matches no subject;
+  asserts `OP_N == 0`, not the full safety-pop count of 8.
+
+- `test-run.R:1463, 1519, 1695, 1878, 2025` — Expand-path tests (T-AE-02
+  pattern) use `data_subset_id = "DS_TEAE"` with a `TRTEMFL = "Y"` filter;
+  result row counts confirm only TEAE rows are counted.
+
+The concern in the original OI-08 entry was moot: the filter was never
+incidental to the `groupId` arm-pin path. It is a formal, explicit step in
+both branches.

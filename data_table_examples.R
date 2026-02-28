@@ -154,12 +154,15 @@ grp_map <- list(
 )
 
 # ── T-DM-01 — Summary of Demographic Characteristics ─────────────────────────
+# CSD compact pattern: 3 analyses (AN_AGE, AN_SEX, AN_RACE), expand path.
+# GRP_SEX is Mode 1 (hardcoded M/F in template); GRP_RACE is Mode 3 (data-driven).
+# variable_map: SEX is not remapped (CDISC standard); keep only study-specific names.
 ard_dm01 <- use_shell("T-DM-01") |>
   hydrate(
     variable_map = c(TRT01A = "TRT01A", SAFFL = "SAFFL",
-                     AGE = "AGE", SEX = "SEX", RACE = "RACE"),
+                     AGE = "AGE", RACE = "RACE"),
     group_map    = grp_map,
-    adam         = list(ADSL = adsl)   # triggers auto value-map discovery
+    adam         = list(ADSL = adsl)   # resolves GRP_RACE (Mode 3)
   ) |>
   run(adam = list(ADSL = adsl))
 render(ard_dm01, backend = "tfrmt")
@@ -169,7 +172,7 @@ ars_pipeline(
   shell        = "T-DM-01",
   adam         = list(ADSL = adsl),
   variable_map = c(TRT01A = "TRT01A", SAFFL = "SAFFL",
-                   AGE = "AGE", SEX = "SEX", RACE = "RACE"),
+                   AGE = "AGE", RACE = "RACE"),
   group_map    = grp_map,
   backend      = "tfrmt"
 )
