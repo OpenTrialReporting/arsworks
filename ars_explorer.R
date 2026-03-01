@@ -1167,7 +1167,7 @@ arsExplorerServer <- function(id, adam_reactive) {
         req(tbl)
         fmt <- input$download_fmt %||% "html"
         if (fmt == "rtf") {
-          writeLines(gt::as_rtf(tbl), file)
+          arstlf::ars_save_rtf(tbl, file)
         } else {
           writeLines(gt::as_raw_html(tbl), file)
         }
