@@ -1139,13 +1139,20 @@ arsExplorerServer <- function(id, adam_reactive) {
     output$download_bar <- renderUI({
       req(table_result())
       div(
-        class = "d-flex align-items-center gap-2 mb-3",
+        class = "d-flex align-items-center gap-2 mb-3 flex-wrap",
         selectInput(
           inputId  = ns("download_fmt"),
           label    = NULL,
-          choices  = c("HTML" = "html", "RTF" = "rtf"),
+          choices  = c("HTML" = "html", "PDF" = "pdf", "DOCX" = "docx", "RTF" = "rtf"),
           selected = "html",
           width    = "110px"
+        ),
+        radioButtons(
+          inputId  = ns("download_orient"),
+          label    = NULL,
+          choices  = c("Landscape" = "landscape", "Portrait" = "portrait"),
+          selected = "landscape",
+          inline   = TRUE
         ),
         downloadButton(
           outputId = ns("download_table"),
@@ -1159,15 +1166,127 @@ arsExplorerServer <- function(id, adam_reactive) {
     output$download_table <- downloadHandler(
       filename = function() {
         fmt <- input$download_fmt %||% "html"
-        ext <- if (fmt == "rtf") ".rtf" else ".html"
+        ext <- switch(fmt, pdf = ".pdf", docx = ".docx", rtf = ".rtf", ".html")
         paste0(input$shell_id, "_", format(Sys.time(), "%Y%m%d_%H%M%S"), ext)
       },
       content = function(file) {
-        tbl <- table_result()
+        tbl    <- table_result()
         req(tbl)
-        fmt <- input$download_fmt %||% "html"
+        fmt    <- input$download_fmt    %||% "html"
+        orient <- input$download_orient %||% "landscape"
+
         if (fmt == "rtf") {
-          arstlf::ars_save_rtf(tbl, file)
+          rtf_str <- gt::as_rtf(tbl)
+          # gt may leave raw Unicode non-breaking spaces (U+00A0) in the string.
+          # Written as UTF-8 bytes (\xc2\xa0) these appear as "Â " in RTF readers
+          # that interpret the file as Latin-1.  Strip all three forms first.
+          rtf_str <- gsub("\u00a0", " ", rtf_str, fixed = TRUE)  # raw Unicode
+          rtf_str <- gsub("\\'a0",  " ", rtf_str, fixed = TRUE)  # RTF hex escape
+          rtf_str <- gsub("\\~",    " ", rtf_str, fixed = TRUE)  # RTF control word
+          # Set A4 page dimensions and orientation.
+          #
+          # Strategy: in-place replacement of gt's existing \paperw / \paperh
+          # values rather than strip-then-inject.  This avoids any risk of the
+          # \rtf1 anchor being lost or moved during stripping.
+          #
+          # Landscape: replace numbers with A4 landscape dims; ensure \landscape
+          #            is present (inject after \rtf1 if missing).
+          # Portrait:  replace numbers with A4 portrait dims; remove \landscape
+          #            if present (gt shouldn't add it, but be defensive).
+          #
+          # Fallback: if gt emitted no \paperw / \paperh at all, inject a full
+          # page-header block after \rtf1.
+          if (orient == "landscape") {
+            rtf_str <- gsub("\\\\paperw[0-9]+", "\\\\paperw16838", rtf_str, perl = TRUE)
+            rtf_str <- gsub("\\\\paperh[0-9]+", "\\\\paperh11906", rtf_str, perl = TRUE)
+            if (!grepl("\\\\landscape", rtf_str, perl = TRUE)) {
+              rtf_str <- sub("\\rtf1", "\\rtf1\\landscape",
+                             rtf_str, fixed = TRUE)
+            }
+          } else {
+            rtf_str <- gsub("\\\\landscape",    "",            rtf_str, perl = TRUE)
+            rtf_str <- gsub("\\\\paperw[0-9]+", "\\\\paperw11906", rtf_str, perl = TRUE)
+            rtf_str <- gsub("\\\\paperh[0-9]+", "\\\\paperh16838", rtf_str, perl = TRUE)
+          }
+          # Fallback: gt emitted no paper dims — inject the full block
+          if (!grepl("\\\\paperw", rtf_str, perl = TRUE)) {
+            page_tokens <- if (orient == "landscape") {
+              "\\landscape\\paperw16838\\paperh11906"
+            } else {
+              "\\paperw11906\\paperh16838"
+            }
+            rtf_str <- sub("\\rtf1", paste0("\\rtf1", page_tokens),
+                           rtf_str, fixed = TRUE)
+          }
+          # Write as binary to prevent Windows \n→\r\n conversion corrupting the file.
+          con <- file(file, open = "wb")
+          cat(rtf_str, file = con)
+          close(con)
+
+        } else if (fmt == "pdf") {
+          if (!requireNamespace("webshot2", quietly = TRUE)) {
+            showNotification(
+              "PDF export requires the 'webshot2' package. Install it with: install.packages(\"webshot2\")",
+              type = "error", duration = 10
+            )
+            return()
+          }
+          # Wrap the table HTML in a full document so we have full control over
+          # the <head>.  gt::as_raw_html() with inline_css = TRUE (default) is
+          # fine for the table content; we add the @page rule ourselves in a
+          # separate <style> block.  Chrome's printToPDF honours @page for PDF
+          # page size / orientation.
+          page_rule <- if (orient == "landscape") {
+            "@page { size: A4 landscape; margin: 1cm; }"
+          } else {
+            "@page { size: A4 portrait;  margin: 1cm; }"
+          }
+          html_full <- paste0(
+            "<!DOCTYPE html><html><head><meta charset='utf-8'>",
+            "<style>", page_rule, "</style>",
+            "</head><body>",
+            gt::as_raw_html(tbl),
+            "</body></html>"
+          )
+          tmp_html <- tempfile(fileext = ".html")
+          tmp_pdf  <- tempfile(fileext = ".pdf")
+          writeLines(html_full, tmp_html, useBytes = TRUE)
+          webshot2::webshot(tmp_html, file = tmp_pdf, zoom = 2)
+          file.copy(tmp_pdf, file)
+
+        } else if (fmt == "docx") {
+          if (!requireNamespace("officer", quietly = TRUE)) {
+            showNotification(
+              "Word export requires the 'officer' package. Install it with: install.packages(\"officer\")",
+              type = "error", duration = 10
+            )
+            return()
+          }
+          tmp <- tempfile(fileext = ".docx")
+          gt::gtsave(tbl, tmp)
+          if (orient == "landscape") {
+            # gt lays out the table with portrait-width column measurements baked in.
+            # Patching <w:pgSz> after the fact flips the page dimensions but leaves
+            # the table content sized for portrait — Word shows it correctly only
+            # after a manual relayout.
+            #
+            # The fix: read the DOCX back into officer and replace the section
+            # properties via officer's own API. This updates the body-level <w:sectPr>
+            # (the one Word uses for print-layout view), and officer re-serializes the
+            # file in a way that Word accepts without needing a manual relayout trigger.
+            doc <- officer::read_docx(tmp)
+            landscape_sec <- officer::prop_section(
+              page_size = officer::page_size(
+                width  = 11.69,   # A4 landscape: 297 mm in inches
+                height =  8.27,   # A4 landscape: 210 mm in inches
+                orient = "landscape"
+              )
+            )
+            doc <- officer::body_set_default_section(doc, landscape_sec)
+            print(doc, target = tmp)
+          }
+          file.copy(tmp, file)
+
         } else {
           writeLines(gt::as_raw_html(tbl), file)
         }
