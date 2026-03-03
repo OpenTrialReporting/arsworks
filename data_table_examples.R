@@ -159,7 +159,13 @@ grp_map <- list(
 # variable_map: SEX is not remapped (CDISC standard); keep only study-specific names.
 ard_dm01 <- use_shell("T-DM-01") |>
   hydrate(
-    variable_map = c(TRT01A = "TRT01A", SAFFL = "SAFFL",
+    # TRT01P (planned treatment) matches the reference table at
+    # rconsortium.github.io/submissions-pilot1 and gives the correct arm Ns
+    # (86/84/84). TRT01A (actual treatment) differs for 12 subjects in this
+    # dataset and would produce the wrong distribution (86/96/72).
+    # The template uses the generic placeholder name TRT01A; variable_map
+    # remaps it to the actual ADSL column at hydration time.
+    variable_map = c(TRT01A = "TRT01P", SAFFL = "SAFFL",
                      AGE = "AGE", RACE = "RACE"),
     group_map    = grp_map,
     adam         = list(ADSL = adsl)   # resolves GRP_RACE (Mode 3)
@@ -171,7 +177,7 @@ render(ard_dm01, backend = "tfrmt")
 ars_pipeline(
   shell        = "T-DM-01",
   adam         = list(ADSL = adsl),
-  variable_map = c(TRT01A = "TRT01A", SAFFL = "SAFFL",
+  variable_map = c(TRT01A = "TRT01P", SAFFL = "SAFFL",
                    AGE = "AGE", RACE = "RACE"),
   group_map    = grp_map,
   backend      = "tfrmt"
