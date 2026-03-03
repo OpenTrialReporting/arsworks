@@ -1,7 +1,7 @@
 # ars_explorer.R ---------------------------------------------------------------
 #
 # Interactive Shiny explorer for the ARS pipeline.
-# Workflow: select domain → select shell → configure mappings → Get ARD → Get Table
+# Workflow: select domain → select shell → configure mappings → Get Table
 #
 # Usage:
 #   source("ars_explorer.R")
@@ -378,9 +378,8 @@ arsExplorerUI <- function(id) {
       hr(class = "my-2"),
 
       # ── Step 4: Run ───────────────────────────────────────────────────────
-      actionButton(ns("run_ard"), "Get ARD", icon = icon("flask"),
+      actionButton(ns("get_table"), "Get Table", icon = icon("table"),
                    class = "btn-primary w-100 mb-2"),
-      uiOutput(ns("get_table_btn")),
       uiOutput(ns("validate_btn")),
 
       hr(class = "my-2"),
@@ -613,6 +612,18 @@ arsExplorerServer <- function(id, adam_reactive) {
                    paste0("No values found for ", gv, " in ", ds_name)))
         }
 
+        # Determine which arms belong to an analysis population.
+        # Check CDISC flags (ITTFL, SAFFL, RANDFL) to find arms with
+        # at least one flagged subject; deselect arms that have none.
+        pop_flags  <- intersect(c("ITTFL", "SAFFL", "RANDFL"), names(ds))
+        in_pop_set <- if (length(pop_flags) > 0 && gv %in% names(ds)) {
+          flag_col <- pop_flags[1]
+          flagged  <- ds[[gv]][!is.na(ds[[flag_col]]) & ds[[flag_col]] == "Y"]
+          unique(flagged[!is.na(flagged)])
+        } else {
+          arm_vals
+        }
+
         tagList(
           tags$small(class = "text-secondary",
                      paste0(gv, " \u2014 ", length(arm_vals), " arms detected")),
@@ -626,13 +637,14 @@ arsExplorerServer <- function(id, adam_reactive) {
             ),
             # One row per arm
             lapply(seq_along(arm_vals), function(i) {
+              default_on <- arm_vals[i] %in% in_pop_set
               fluidRow(
                 class = "mb-1 align-items-center",
                 column(1,
                   checkboxInput(
                     inputId = ns(paste0("ginclude_", gf@id, "_", i)),
                     label   = NULL,
-                    value   = TRUE
+                    value   = default_on
                   )
                 ),
                 column(4, tags$small(class = "text-secondary", arm_vals[i])),
@@ -830,20 +842,6 @@ arsExplorerServer <- function(id, adam_reactive) {
       ovm_counter(0L)
     }) |> bindEvent(input$shell_id, input$domain, ignoreInit = TRUE)
 
-    # ── Render: "Get Table" button — only enabled when ARD is ready ───────────
-    output$get_table_btn <- renderUI({
-      if (is.null(ard_result())) {
-        tags$button(
-          class = "btn btn-success w-100 disabled",
-          disabled = NA,
-          icon("table"), " Get Table"
-        )
-      } else {
-        actionButton(ns("get_table"), "Get Table", icon = icon("table"),
-                     class = "btn-success w-100")
-      }
-    })
-
     # ── Render: "Validate" button — only enabled when ARD is ready ───────────
     output$validate_btn <- renderUI({
       if (is.null(ard_result())) {
@@ -967,7 +965,7 @@ arsExplorerServer <- function(id, adam_reactive) {
           class = "d-flex flex-column align-items-center justify-content-center text-muted",
           style = "min-height: 300px;",
           icon("shield-check", class = "fa-2x mb-3"),
-          p("Click ", strong("Validate"), " after getting the ARD to run integrity checks.")
+          p("Click ", strong("Validate"), " after running ", strong("Get Table"), " to run integrity checks.")
         ))
       }
 
@@ -1061,13 +1059,13 @@ arsExplorerServer <- function(id, adam_reactive) {
       )
     })
 
-    # ── "Get ARD" button ──────────────────────────────────────────────────────
-    observeEvent(input$run_ard, {
+    # ── "Get Table" button — full pipeline: hydrate → run → render ───────────
+    observeEvent(input$get_table, {
       table_result(NULL)      # stale table is now invalid
       validate_result(NULL)   # stale validation is now invalid
 
-      withProgress(message = "Running analysis\u2026", value = 0.5, {
-        result <- tryCatch({
+      withProgress(message = "Running analysis\u2026", value = 0.3, {
+        ard <- tryCatch({
           withCallingHandlers({
             sh_hydrated <- hydrate(
               shell_obj(),
@@ -1087,14 +1085,37 @@ arsExplorerServer <- function(id, adam_reactive) {
                            type = "error", duration = 10)
           NULL
         })
+
+        if (!is.null(ard)) {
+          # Enrich ARD with analysis metadata and group labels
+          ard$ard <- enrich_ard(ard$ard, ard$shell@reporting_event)
+          ard_result(ard)
+          setProgress(0.7, message = "Rendering table\u2026")
+
+          tbl <- tryCatch(
+            render(ard, backend = "tfrmt"),
+            error = function(e) {
+              showNotification(paste("Render error:", .strip_ansi(conditionMessage(e))),
+                               type = "error", duration = 10)
+              NULL
+            }
+          )
+          table_result(tbl)
+        }
       })
 
-      if (!is.null(result)) {
-        ard_result(result)
+      if (!is.null(table_result())) {
+        nav_select(id = "tabs", selected = "Compare", session = session)
+        showNotification(
+          paste0("Table ready (", nrow(ard_result()$ard), " ARD rows)"),
+          type = "message", duration = 3
+        )
+      } else if (!is.null(ard_result())) {
+        # ARD succeeded but render failed — show ARD tab
         nav_select(id = "tabs", selected = "ARD", session = session)
         showNotification(
-          paste0("ARD ready: ", nrow(result$ard), " rows"),
-          type = "message", duration = 3
+          paste0("ARD ready (", nrow(ard_result()$ard), " rows) but render failed."),
+          type = "warning", duration = 5
         )
       }
     })
@@ -1113,26 +1134,6 @@ arsExplorerServer <- function(id, adam_reactive) {
         resizable   = TRUE,
         wrap        = FALSE
       )
-    })
-
-    # ── "Get Table" button ────────────────────────────────────────────────────
-    observeEvent(input$get_table, {
-      withProgress(message = "Rendering table\u2026", value = 0.5, {
-        tbl <- tryCatch(
-          render(ard_result(), backend = "tfrmt"),
-          error = function(e) {
-            showNotification(paste("Render error:", .strip_ansi(conditionMessage(e))),
-                             type = "error", duration = 10)
-            NULL
-          }
-        )
-        table_result(tbl)
-      })
-
-      if (!is.null(table_result())) {
-        nav_select(id = "tabs", selected = "Compare", session = session)
-        showNotification("Table rendered.", type = "message", duration = 3)
-      }
     })
 
     # ── Output: download toolbar — appears only when table is ready ──────────
@@ -1311,7 +1312,7 @@ arsExplorerServer <- function(id, adam_reactive) {
           class = "d-flex flex-column align-items-center justify-content-center h-100 text-muted",
           style = "min-height: 200px;",
           icon("arrow-left", class = "fa-2x mb-3"),
-          p("Configure and click ", strong("Get ARD"), " then ", strong("Get Table"),
+          p("Configure and click ", strong("Get Table"),
             " to see the results here.")
         )
       } else {
