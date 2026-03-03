@@ -8,7 +8,7 @@ for CDISC-compliant clinical trial reporting.
 
 | Package | Responsibility |
 |---------|---------------|
-| **arscore** | S7 data model, JSON I/O, validation, ARD extraction |
+| **arscore** | S7 data model, JSON I/O, validation, ARD extraction, `enrich_ard()` |
 | **arsshells** | Shell templates, hydration (variable/group/value mapping, Mode 3 expansion) |
 | **arsresult** | Method registry, `run()` execution pipeline, built-in statistical methods (`stdlib.R`) |
 | **arstlf** | Table/figure rendering via tfrmt backend |
@@ -241,13 +241,61 @@ All 6 shells clean (hydrate → run → render) using source packages loaded via
 | T-LB-01 | 1344 | 84 | 0 | NA min/max fix verified — 0 -Inf values in ARD |
 | T-LB-02 | 216 | 45 | 0 | |
 
-## Test suite (2026-02-28, post §23 migration)
+## §24 Self-Describing ARD + Explorer UX — COMPLETE (2026-03-03)
+
+### ARD enrichment
+
+**`arsresult/R/run.R`**: `group_value` is now populated on `ars_result_group`
+objects at both construction sites (expand-path combo loop and PIN-path standard
+filter). The condition value (e.g. "Placebo", "F") is extracted from
+`g@condition@value[[1]]`. Total groups (no condition) remain `NA_character_`.
+
+**`arscore/R/create_ard.R`**: New exported function `enrich_ard(ard, reporting_event)`
+joins self-describing metadata onto an ARD tibble:
+
+| Column added | Source |
+|-------------|--------|
+| `analysis_label` | `ars_analysis@name` |
+| `method_id` | `ars_analysis@method_id` |
+| `dataset` | `ars_analysis@dataset` |
+| `variable` | `ars_analysis@variable` |
+| `analysis_set_id` | `ars_analysis@analysis_set_id` |
+| `data_subset_id` | `ars_analysis@data_subset_id` |
+| `group_label` (and `_1`, `_2`) | `ars_group@label` via group_id lookup |
+
+Column ordering: metadata after `analysis_id`; each `group_label` adjacent to
+its `group_id`. `formatted_value` remains NA — formatting is the render layer's
+responsibility.
+
+### Explorer UX improvements (`ars_explorer.R`)
+
+- **Single "Get Table" button**: Consolidated "Get ARD" + "Get Table" into one
+  primary action that runs the full pipeline (hydrate → run → enrich → render).
+  Graceful degradation: if render fails, navigates to ARD tab with a warning.
+- **Dynamic screening arm deselection**: Treatment arm checkboxes default to
+  unchecked for arms with no subjects in analysis populations. Uses CDISC flags
+  (ITTFL, SAFFL, RANDFL) in priority order; falls back to all-checked if no
+  flags exist. Study-agnostic.
+- **Enriched ARD tab**: `enrich_ard()` is called after `run()`, so the ARD
+  reactable displays all metadata columns automatically.
+
+### Transpile test fix
+
+Fixed 4 pre-existing test failures in `arsresult/tests/testthat/test-transpile.R`
+(OI-02 numeric coercion guard tests). Root cause: `expect_error(regexp = ...)`
+matched against raw condition messages containing ANSI escape codes and cli
+line-wrapping characters (`│`, `\n`). Fix: capture error manually, strip ANSI
+via `cli::ansi_strip()`, collapse whitespace, then match.
+
+---
+
+## Test suite (2026-03-03, post §24)
 
 | Package | Pass | Fail | Warn |
 |---------|------|------|------|
-| arscore | 1343 | 0 | 0 |
+| arscore | 1359 | 0 | 0 |
 | arsshells | 534 | 0 | 0 |
-| arsresult | 272 | 0 | 1 (expected) |
+| arsresult | 276 | 0 | 1 (expected) |
 | arstlf | 115 | 0 | 0 |
 | ars | 54 | 0 | 16 (expected) |
-| **Total** | **2318** | **0** | **17** |
+| **Total** | **2338** | **0** | **17** |
