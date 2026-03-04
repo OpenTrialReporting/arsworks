@@ -1123,8 +1123,77 @@ arsExplorerServer <- function(id, adam_reactive) {
     # ── Output: ARD data table (ARD tab) ──────────────────────────────────────
     output$ard_dt <- reactable::renderReactable({
       req(ard_result())
+      ard_df <- ard_result()$ard
+
+      # Build column definitions dynamically based on columns present
+      col_defs <- list()
+
+      # ── Key value columns ──────────────────────────────────────────────
+      if ("formatted_value" %in% names(ard_df)) {
+        col_defs[["formatted_value"]] <- reactable::colDef(
+          name  = "Formatted",
+          style = list(fontWeight = "600", fontFamily = "monospace")
+        )
+      }
+      if ("raw_value" %in% names(ard_df)) {
+        col_defs[["raw_value"]] <- reactable::colDef(
+          name  = "Raw Value",
+          style = list(fontFamily = "monospace", color = "#666")
+        )
+      }
+
+      if ("result_pattern" %in% names(ard_df)) {
+        col_defs[["result_pattern"]] <- reactable::colDef(
+          name  = "Pattern",
+          style = list(fontFamily = "monospace", color = "#888")
+        )
+      }
+
+      # ── Human-readable label columns shown; IDs hidden by default ──────
+      id_cols <- c("analysis_id", "method_id", "analysis_set_id",
+                    "data_subset_id", "operation_id")
+      for (col in id_cols) {
+        if (col %in% names(ard_df)) {
+          col_defs[[col]] <- reactable::colDef(show = FALSE)
+        }
+      }
+
+      # Hide grouping_id columns (labels are more useful)
+      gid_cols <- grep("^grouping_id", names(ard_df), value = TRUE)
+      for (col in gid_cols) {
+        col_defs[[col]] <- reactable::colDef(show = FALSE)
+      }
+
+      # Hide group_id columns when corresponding group_label exists
+      for (col in grep("^group_id", names(ard_df), value = TRUE)) {
+        suffix    <- sub("^group_id", "", col)
+        label_col <- paste0("group_label", suffix)
+        if (label_col %in% names(ard_df)) {
+          col_defs[[col]] <- reactable::colDef(show = FALSE)
+        }
+      }
+
+      # Friendly names for common columns
+      friendly <- c(
+        analysis_label = "Analysis",
+        dataset        = "Dataset",
+        variable       = "Variable",
+        group_value    = "Group Value",
+        group_label    = "Group",
+        group_value_1  = "Group Value 1",
+        group_label_1  = "Group 1",
+        group_value_2  = "Group Value 2",
+        group_label_2  = "Group 2"
+      )
+      for (col in names(friendly)) {
+        if (col %in% names(ard_df) && is.null(col_defs[[col]])) {
+          col_defs[[col]] <- reactable::colDef(name = friendly[[col]])
+        }
+      }
+
       reactable::reactable(
-        ard_result()$ard,
+        ard_df,
+        columns     = col_defs,
         searchable  = TRUE,
         filterable  = TRUE,
         pagination  = TRUE,

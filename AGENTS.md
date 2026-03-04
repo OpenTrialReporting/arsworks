@@ -264,8 +264,7 @@ joins self-describing metadata onto an ARD tibble:
 | `group_label` (and `_1`, `_2`) | `ars_group@label` via group_id lookup |
 
 Column ordering: metadata after `analysis_id`; each `group_label` adjacent to
-its `group_id`. `formatted_value` remains NA — formatting is the render layer's
-responsibility.
+its `group_id`.
 
 ### Explorer UX improvements (`ars_explorer.R`)
 
@@ -289,13 +288,72 @@ via `cli::ansi_strip()`, collapse whitespace, then match.
 
 ---
 
-## Test suite (2026-03-03, post §24)
+## §25 `formatted_value` via `resultPattern` — COMPLETE (2026-03-03)
+
+`enrich_ard()` now populates the `formatted_value` column by applying each
+operation's `resultPattern` (declared in the method definition) to `raw_value`.
+Previously `formatted_value` was left as `NA_character_`.
+
+### New file: `arscore/R/format_result_pattern.R`
+
+Exported functions:
+- **`format_result_pattern(raw_value, result_pattern)`** — formats a single value.
+- **`format_result_patterns(raw_values, patterns)`** — vectorised wrapper.
+
+### Formatting rules (derived from CDISC CSD v1.0 reference JSON)
+
+1. **Case-insensitive**: `"xx.x"` and `"XX.X"` are equivalent.
+2. Contiguous runs of X characters (with optional `.`) define numeric fields.
+   X-count after the decimal → decimal precision; no decimal → integer.
+3. **Parenthesized patterns** (`(XX.XX)`, `( XX.X)`, `(N=XX)`) are **fixed-width**:
+   output is right-justified with leading spaces to match the pattern's `nchar`.
+4. **Non-parenthesized patterns** (`XX`, `XX.X`, `X.XXXX`) enforce decimal
+   precision only — no width padding.
+5. Literal characters (parentheses, `N=`, `%`, spaces) are preserved verbatim.
+6. `NA` or non-numeric `raw_value` → `NA_character_`.
+7. Existing non-NA `formatted_value` entries are never overwritten.
+
+### Pattern examples
+
+| `resultPattern` | `raw_value` | `formatted_value` |
+|-----------------|-------------|-------------------|
+| `XX` | `86` | `86` |
+| `XX.X` | `75.2093` | `75.2` |
+| `(XX.XX)` | `8.59` | `( 8.59)` |
+| `( XX.X)` | `1.16` | `(  1.2)` |
+| `(N=XX)` | `86` | `(N=86)` |
+| `X.XXXX` | `0.0065` | `0.0065` |
+
+### Integration in `enrich_ard()`
+
+After joining analysis-level metadata (step 1), `enrich_ard()` builds a
+`(method_id, operation_id) → result_pattern` lookup from the reporting event's
+methods, joins it to the ARD, applies `format_result_patterns()` to rows where
+`formatted_value` is `NA`, then drops the transient `result_pattern` column.
+
+### Validation against CDISC CSD
+
+Tested against all 3,734 `formattedValue` entries in the Common Safety Displays
+v1.0 reference JSON. 3,183 exact matches; the 551 mismatches are CSD data
+quality issues (raw values already containing decimals under integer patterns,
+inconsistent padding in one analysis, 1 banker's rounding edge case).
+
+### Tests
+
+New test file: `arscore/tests/testthat/test-format_result_pattern.R` (41 assertions)
+covering all CSD pattern types, edge cases, vectorised wrapper, `enrich_ard()`
+integration, preservation of existing `formatted_value`, and cleanup of transient
+columns.
+
+---
+
+## Test suite (2026-03-03, post §25)
 
 | Package | Pass | Fail | Warn |
 |---------|------|------|------|
-| arscore | 1359 | 0 | 0 |
-| arsshells | 534 | 0 | 0 |
-| arsresult | 276 | 0 | 1 (expected) |
-| arstlf | 115 | 0 | 0 |
-| ars | 54 | 0 | 16 (expected) |
-| **Total** | **2338** | **0** | **17** |
+| arscore | 1409 | 0 | 0 |
+| arsshells | 548 | 0 | 0 |
+| arsresult | 312 | 0 | 1 (expected) |
+| arstlf | 120 | 0 | 0 |
+| ars | 58 | 0 | 4 (expected) |
+| **Total** | **2447** | **0** | **5** |
