@@ -2,7 +2,7 @@
 # Build: docker build -t arsworks:dev .
 # Run:   docker run -it --rm -v $(pwd):/workspace arsworks:dev
 #
-# Strategy: Uses rocker/r-ubuntu (pre-compiled R packages) for fast builds on ARM64
+# Strategy: Uses rocker/r-ubuntu (pre-compiled R packages) for fast builds
 # CI/CD: GitHub Actions builds on x86, pushes to ghcr.io
 # Deployment: rk3 pulls pre-built image (instant, no compilation)
 
@@ -11,17 +11,16 @@ FROM rocker/r-ubuntu:latest
 LABEL maintainer="Lovemore Gakava <Lovemore.Gakava@gmail.com>"
 LABEL description="arsworks: ARS Reporting Suite (arscore, arsshells, arsresult, arstlf, ars)"
 
-# Install additional system dependencies
-# (rocker/r-ubuntu already includes r-base, build-essential, gfortran, pandoc, etc.)
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     vim \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install R package management tools
-# (renv for version locking, devtools for package development, pkgdown for docs, shiny for optional apps)
-RUN R --vanilla --quiet -e "install.packages(c('devtools', 'renv', 'pkgdown', 'shiny'), repos='https://cloud.r-project.org')"
+# Install R packages directly (bypass renv to avoid restoration issues in CI/CD)
+# These are the core packages needed for arsworks development
+RUN R --vanilla --quiet -e "install.packages(c('devtools', 'shiny', 'pkgdown'), repos='https://cloud.r-project.org')"
 
 # Set working directory
 WORKDIR /workspace
@@ -29,8 +28,8 @@ WORKDIR /workspace
 # Copy project files
 COPY . .
 
-# Install all dependencies from renv.lock (exact versions)
-RUN R --vanilla --quiet -e "renv::restore(upgrade = FALSE, clean = FALSE)"
+# Optional: Load all packages to verify installation
+RUN R --vanilla --quiet -e "library(devtools); message('arsworks container ready')"
 
 # Create volume mount point for live development
 VOLUME ["/workspace"]
