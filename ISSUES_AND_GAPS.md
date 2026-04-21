@@ -109,7 +109,7 @@ The PIN path already guarded against this (§2.4 — analysis-variable-matching 
 
 ---
 
-## 3. ars Package Issues (Fixed)
+## 3. ars / arsshells Package Issues (Fixed)
 
 ### 3.1 `ars::run()` Shell detection used `inherits()` instead of `S7::S7_inherits()`  `[BUG-FIXED]`
 
@@ -140,6 +140,21 @@ ARD error: [38;5;232m`re` must be an [34m<arscore::ars_reporting_event>
 **Cause:** `cli` formats all messages with ANSI colour sequences. `conditionMessage()` returns those sequences as-is. Shiny's `showNotification()` and `tags$pre()` render them as literal characters.
 
 **Fix:** Added `.strip_ansi <- function(x) cli::ansi_strip(x)` and applied it at all 7 notification/card message sites in `ars_explorer.R`.
+
+---
+
+### 3.3 arsshells T-AE-02 rendered the SOC name twice per section  `[BUG-FIXED]`
+
+**Symptom:** T-AE-02 (TEAEs by SOC and PT) output showed each SOC on two consecutive rows — first as a bare group-header row, then again as the indent-0 data row with its counts:
+
+```
+CARDIAC DISORDERS
+CARDIAC DISORDERS    12 (14.0%)    14 (14.6%)    14 (19.4%)    40 (15.7%)
+```
+
+**Cause:** The prototype section in `arsshells/inst/templates/tables/T-AE-02.json` had both `label: "__PARAM_LABEL__"` **and** `cells[0].rowLabel: "__PARAM_LABEL__"`. After hydration both became the SOC name, and `arstlf`'s tfrmt backend rendered each as a separate row — the section label as a row-group header (via tfrmt's `row_grp_plan`) and the cell as its first data row.
+
+**Fix:** Set the prototype section's `label` to an empty string. The SOC name now appears exactly once — on the indent-0 SOC-total cell's `rowLabel`. `arstlf` computes `has_groups` from section labels; with all labels empty the tfrmt spec omits the group column entirely, so no duplicate header row is emitted. This matches the CDISC pilot T-AE-02 layout convention.
 
 ---
 
