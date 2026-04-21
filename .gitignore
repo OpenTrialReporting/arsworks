@@ -33,3 +33,6 @@ renv/.cache/
 .DS_Store
 Thumbs.db
 .positai
+
+# Claude Code local settings
+.claude/
