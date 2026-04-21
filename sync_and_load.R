@@ -46,9 +46,9 @@ pull_results <- vapply(PACKAGES, function(pkg) {
   # the superproject; a plain `git pull` has no upstream to track. Skip rather
   # than warn — use `git submodule update --remote` from the superproject to
   # advance pins intentionally.
-  head_ref <- system2("git", c("-C", path, "symbolic-ref", "-q", "HEAD"),
+  head_ref <- system2("git", c("-C", path, "rev-parse", "--abbrev-ref", "HEAD"),
                       stdout = TRUE, stderr = FALSE)
-  if (!is.null(attr(head_ref, "status")) && attr(head_ref, "status") != 0L) {
+  if (identical(as.character(head_ref), "HEAD")) {
     message(sprintf("  SKIP  %s  (detached HEAD — pinned by superproject)", pkg))
     return("skipped")
   }
