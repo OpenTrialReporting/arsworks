@@ -1,7 +1,7 @@
 # arsworks — Known Issues and Gaps
 
 **Maintained by:** Lovemore Gakava  
-**Last updated:** 2026-02-28  
+**Last updated:** 2026-04-21  
 **Scope:** Issues confirmed against the live codebase; workarounds in place unless marked otherwise.
 
 Each entry is tagged:
@@ -92,6 +92,20 @@ confirms "No pre-filter is needed". `arstlf` composes display cells at render ti
 When the denominator calculation (ADSL-based N for `OP_N_PCT`) fails — e.g., ADSL lacks the grouping variable — `run()` warns and falls back to the full analysis-set size. This preserves pipeline continuity but can produce incorrect percentages.
 
 **Mitigation:** A `cli_warn()` is always emitted naming the analysis and the error. The denominator value should be treated as suspect when this warning appears.
+
+---
+
+### 2.4 Expand-path OP_N_PCT = 100% in demographics tables  `[BUG-FIXED]`
+
+**Symptom:** Every percentage in T-DM-01 demographics (Sex, Race) rendered as `100 (100.0%)`, regardless of the actual arm/category distribution. The numerator was correct; the denominator was wrong.
+
+**Cause:** T-DM-01's `AN_SEX` and `AN_RACE` analyses declare TWO expand factors — `GF_TRT` (arm, `resultsByGroup = TRUE`) and `GF_SEX` / `GF_RACE` (category, also `resultsByGroup = TRUE`). On the EXPAND path in `arsresult::run()`, `.compute_set_n_from_adsl()` iterated over every group in the combo and applied its condition to ADSL whenever the condition variable was present. Because the category variable (`SEX`, `RACE`) is also on ADSL, the category filter narrowed the ADSL denominator to `N(arm ∩ category)` — the same rows as the numerator — forcing `OP_N_PCT = 100`.
+
+The PIN path already guarded against this (§2.4 — analysis-variable-matching grouping factors are row-dimension filters that must not enter the denominator). The EXPAND path had no equivalent guard.
+
+**Fix (`arsresult/R/run.R`):** `.compute_set_n_from_adsl()` now takes an `analysis_variable` parameter (the analysis's `@variable` — i.e. the column being summarised). Groups whose `@condition@variable` equals `analysis_variable` are skipped: only column-dimension conditions (arm) narrow the ADSL denominator. The call site in the combo loop passes `analysis_variable = dataset` (the local alias for `analysis@variable`).
+
+**Test:** `tests/testthat/test-run.R` — "expand-path ADSL: OP_N_PCT denominator excludes row-dimension category (T-DM-01 bug)". Levels of `RACE` are derived from `unique(adsl$RACE)` rather than hardcoded, and expected numerator/denominator/percentage are computed from the fixture — so the assertions stay correct if the fixture changes.
 
 ---
 
