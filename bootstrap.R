@@ -146,8 +146,18 @@ for (pkg in install_order) {
 
   message(sprintf("  Installing %-12s from ./%s/ ...", pkg, pkg))
 
+  # Regenerate man pages, NAMESPACE, and Collate: from the current R/ sources
+  # before install. Without this, a newly added R file that isn't yet in
+  # Collate: will cause R CMD INSTALL to fail.
   tryCatch(
-    devtools::install(path, quiet = TRUE, upgrade = "never"),
+    devtools::document(path, quiet = TRUE),
+    error = function(e) {
+      stop(sprintf("Failed to document %s:\n  %s", pkg, conditionMessage(e)))
+    }
+  )
+
+  tryCatch(
+    devtools::install(path, quiet = TRUE, upgrade = FALSE),
     error = function(e) {
       stop(sprintf("Failed to install %s:\n  %s", pkg, conditionMessage(e)))
     }

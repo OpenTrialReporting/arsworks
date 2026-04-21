@@ -38,8 +38,18 @@ message("\n── Pulling latest from sub-package repos ────────
 
 pull_results <- vapply(PACKAGES, function(pkg) {
   path <- file.path(ROOT, pkg)
-  if (!dir.exists(file.path(path, ".git"))) {
+  if (!file.exists(file.path(path, ".git"))) {
     message(sprintf("  SKIP  %s  (no .git — running as submodule pointer only)", pkg))
+    return("skipped")
+  }
+  # Submodules are typically checked out in detached HEAD at the SHA pinned by
+  # the superproject; a plain `git pull` has no upstream to track. Skip rather
+  # than warn — use `git submodule update --remote` from the superproject to
+  # advance pins intentionally.
+  head_ref <- system2("git", c("-C", path, "symbolic-ref", "-q", "HEAD"),
+                      stdout = TRUE, stderr = FALSE)
+  if (!is.null(attr(head_ref, "status")) && attr(head_ref, "status") != 0L) {
+    message(sprintf("  SKIP  %s  (detached HEAD — pinned by superproject)", pkg))
     return("skipped")
   }
   out <- system2("git", c("-C", path, "pull", "--ff-only"), stdout = TRUE, stderr = TRUE)
