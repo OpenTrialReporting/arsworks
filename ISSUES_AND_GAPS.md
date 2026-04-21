@@ -158,6 +158,33 @@ CARDIAC DISORDERS    12 (14.0%)    14 (14.6%)    14 (19.4%)    40 (15.7%)
 
 ---
 
+### 3.4 arstlf collapsed T-AE-02 PT rows into list-cols after the SOC-label fix  `[BUG-FIXED]`
+
+**Symptom:** After §3.3 made T-AE-02's prototype section label empty, `tfrmt::print_to_gt()` emitted:
+
+```
+Values from `value` are not uniquely identified; output will contain list-cols.
+```
+
+Each SOC row in the rendered table showed its count repeated once per PT in that SOC (e.g. `c("21","21","21",...)` 23 times for a SOC with 23 PTs).
+
+**Cause:** `arstlf::.expand_geom_to_tfrmt()` identified the sectioning grouping factor (e.g. `GRP_SOC`) by checking whether any of that GF's group labels equalled `section_label`. With `section_label = ""` no GF label matched, so:
+
+1. Section filtering degraded to "accept every ARD row for every section."
+2. The sectioning GF was not excluded from row-label assembly, so `row_label` ended up as the SOC name for every PT row.
+
+`pivot_wider` then saw 23 PT rows per SOC with `(label = "SOC name", column, param)` triples all equal, and collapsed them into list-cols.
+
+**Fix (`arstlf/R/prep_ard.R`):**
+
+* `.extract_shell_geometry()` emits a new `section_match_key` column. It equals `section@label` when non-empty; otherwise it falls back to the first non-empty indent-0 cell `row_label` within the section (the SOC name for T-AE-02).
+* `.expand_geom_to_tfrmt()` accepts a new `section_match_key` parameter and uses it in all three places previously comparing against `section_label` (the initial "find the sect GF" pass, the "this row belongs in this section?" guard, and the "skip the sect GF when building row labels" filter).
+* Expand-path long rows now set `group = section_match_key` (when `section_label` is empty) so rows cluster by SOC in the long data. The existing sort block already detects the SOC-total row via `label == group`, so the section-header-first / PTs-after ordering is preserved. `build_tfrmt()`'s `has_groups` flag still reads `section@label` (unchanged), so the `group` column is omitted from the tfrmt spec and no group-header row is rendered.
+
+**Test:** the existing T-AE-02 integration tests and a manual end-to-end render confirm that (a) each SOC appears exactly once, (b) PTs appear indented beneath their SOC, and (c) no `pivot_wider` list-col warning is emitted.
+
+---
+
 ## 4. ARS Explorer Validation Notes
 
 ### 4.1 Layer 2 failures that are expected and handled
