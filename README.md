@@ -26,37 +26,52 @@ cd arsworks
 > Step 2 handles submodule initialisation automatically, even if you forgot
 > `--recurse-submodules`.
 
-### 2. Open and bootstrap
+### 2. Open and set up
 
 Open `arsworks.Rproj` in RStudio. renv activates automatically via `.Rprofile`.
-Then run the one-shot bootstrap script:
+Then run the one-command setup script:
 
 ```r
-source("bootstrap.R")
+source("setup.R")
 ```
 
-This script does four things in order:
+This is the recommended entry point for both fresh clones and returning
+sessions. It auto-detects whether a full bootstrap is needed, then syncs,
+loads, builds the example tables, and runs UAT checks.
 
-| Step | What it does |
-|------|--------------|
-| 1 | Initialises git submodules (`git submodule update --init --recursive`) |
-| 2 | Patches `renv.lock` so the local `ars` package is not fetched from CRAN¹ |
-| 3 | Runs `renv::restore()` to install all pinned CRAN dependencies |
-| 4 | Installs the five local sub-packages in dependency order |
+| Phase | What it does | When it runs |
+|-------|--------------|--------------|
+| Bootstrap | Submodule init, `renv::restore()`, install 5 local packages | Only when the environment is stale (see below) |
+| Sync & load | `devtools::document()` + `load_all()` on all 5 sub-packages | Every time |
+| Examples | Builds `adsl`/`adae`/`adlb` and renders all 6 shells | Every time (skippable) |
+| UAT checks | §22 ARD + render-level checks across all shells | Every time (skippable) |
 
-> ¹ An unrelated package on CRAN is also named `ars`. Without the patch,
-> `renv::restore()` tries to download it and fails on a version mismatch.
-> The bootstrap fixes this automatically.
+**Bootstrap auto-triggers when any of the following is true:**
 
-### 3. Start working
+- A submodule directory is empty (fresh clone without `--recurse-submodules`)
+- One of the five local packages is not installed
+- An installed local package's version differs from its `DESCRIPTION`
+  (submodule pointer was bumped — reinstall needed)
+- `renv::status()` reports missing CRAN packages (environment drift)
+
+**Fine-grained control:**
 
 ```r
-source("sync_and_load.R")      # document + load all five packages
-source("data_table_examples.R") # creates adsl, adae, adlb in your session
+source("setup.R")
+setup(force_bootstrap = TRUE)   # reinstall even if env looks OK
+setup(skip_examples   = TRUE)   # bootstrap + sync only
+setup(skip_uat        = TRUE)   # skip UAT checks
 ```
 
-Run `source("sync_and_load.R")` at the start of every session, or after
-pulling changes to any sub-package.
+> The individual scripts (`bootstrap.R`, `sync_and_load.R`,
+> `data_table_examples.R`, `uat_checks.R`) remain sourceable on their own
+> for advanced use. `setup.R` just orchestrates them.
+
+### 3. Subsequent sessions
+
+Re-running `source("setup.R")` at the start of each session is safe — it
+will skip the bootstrap phase when the environment is healthy and only
+re-document, re-load, and re-run the examples/UAT.
 
 ---
 
@@ -90,18 +105,16 @@ together.
 
 ## Usage
 
-Start each session by sourcing the loader script — it documents and loads all
-five packages in one step:
+Start each session with:
 
 ```r
-source("sync_and_load.R")
+source("setup.R")
 ```
 
-Then load the example data:
-
-```r
-source("data_table_examples.R")  # creates adsl, adae, adlb in your session
-```
+This loads all five packages and creates `adsl`, `adae`, `adlb` in your
+session (plus `ard_dm01`, …, `ard_lb02` and `gt_dm01`, …, `gt_lb02` from
+the examples + UAT checks). Skip the UAT step with `setup(skip_uat = TRUE)`
+if you just want the data and rendered tables.
 
 There are two equivalent patterns for generating a table.
 
@@ -255,9 +268,11 @@ arsworks/
 ├── renv.lock             ← pinned R package environment
 ├── renv/                 ← renv activation scripts
 ├── arsworks.Rproj        ← RStudio project file
-├── bootstrap.R           ← one-shot setup script (run once after cloning)
-├── sync_and_load.R       ← session loader (run at the start of each session)
-├── data_table_examples.R ← test data generator
+├── setup.R               ← smart entry point: auto-bootstrap + sync + examples + UAT
+├── bootstrap.R           ← one-shot setup (called by setup.R when needed)
+├── sync_and_load.R       ← session loader (called by setup.R)
+├── data_table_examples.R ← test data + all 6 tables (called by setup.R)
+├── uat_checks.R          ← §22 UAT checks (called by setup.R)
 ├── MASTER_PLAN.md
 └── MAKE_TEST_DATA.md
 ```

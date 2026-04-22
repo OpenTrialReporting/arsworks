@@ -61,8 +61,12 @@ library(dplyr)
   if (is.null(gt_tbl)) return(list(shell = name, render_ok = FALSE, row_count = NA_integer_,
                                     na_text = NA_integer_, hdr_na = NA_integer_))
 
-  # Count rendered body rows (each column in ._body; use nrow of ._body tibble)
-  row_count <- tryCatch(nrow(gt_tbl[["_body"]]), error = function(e) NA_integer_)
+  # Count rendered body rows (each column in ._body; use nrow of ._body tibble).
+  # nrow(NULL) returns NULL (not an error), so coerce NULL/empty to NA_integer_.
+  row_count <- tryCatch({
+    rc <- nrow(gt_tbl[["_body"]])
+    if (is.null(rc) || length(rc) == 0L) NA_integer_ else as.integer(rc)
+  }, error = function(e) NA_integer_)
 
   # Scan HTML for ">NA<" (literal NA text in a cell)
   html <- tryCatch(as.character(gt::as_raw_html(gt_tbl)), error = function(e) "")
@@ -123,14 +127,17 @@ render_results <- lapply(names(shells), function(nm) .uat_render_check(nm, shell
 cat(sprintf("%-10s  %10s  %9s  %10s  %12s\n",
             "Shell", "Render OK", "Row Count", "\"NA\" text", "Unresol.Hdr"))
 cat(strrep("-", 60), "\n")
+.nz <- function(x) length(x) > 0L && !is.na(x)   # not-zero-length AND not-NA
 for (r in render_results) {
-  flag <- if (!isTRUE(r$render_ok) || r$na_text > 0 || r$hdr_na > 0) " ⚠" else " ✓"
+  flag <- if (!isTRUE(r$render_ok) ||
+              (.nz(r$na_text) && r$na_text > 0) ||
+              (.nz(r$hdr_na)  && r$hdr_na  > 0)) " ⚠" else " ✓"
   cat(sprintf("%-10s  %10s  %9s  %10d  %12d  %s\n",
               r$shell,
               if (isTRUE(r$render_ok)) "YES" else "NO",
-              if (is.na(r$row_count)) "?" else as.character(r$row_count),
-              if (is.na(r$na_text)) 0L else r$na_text,
-              if (is.na(r$hdr_na)) 0L else r$hdr_na,
+              if (!.nz(r$row_count)) "?" else as.character(r$row_count),
+              if (!.nz(r$na_text))   0L  else r$na_text,
+              if (!.nz(r$hdr_na))    0L  else r$hdr_na,
               flag))
 }
 
