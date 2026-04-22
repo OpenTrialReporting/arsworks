@@ -1,9 +1,9 @@
 # Contributing to arsworks
 
-`arsworks` is a monorepo coordinator: the five R packages (`ars`, `arscore`,
-`arsshells`, `arsresult`, `arstlf`) live in their own git repositories under
-<https://github.com/OpenTrialReporting> and are included here as git
-submodules.
+`arsworks` is a monorepo coordinator: the six R packages (`ars`, `arscore`,
+`arsshells`, `arsresult`, `arstlf`, `arsstudio`) live in their own git
+repositories under <https://github.com/OpenTrialReporting> and are included
+here as git submodules.
 
 This changes how contributions flow compared to a single-repo project.
 
@@ -18,7 +18,8 @@ This changes how contributions flow compared to a single-repo project.
 | R code in `arsshells/` | `OpenTrialReporting/arsshells` |
 | R code in `arsresult/` | `OpenTrialReporting/arsresult` |
 | R code in `arstlf/` | `OpenTrialReporting/arstlf` |
-| `ars_explorer.R`, `bootstrap.R`, `sync_and_load.R`, `renv.lock`, `README.md`, `AGENTS.md`, `MASTER_PLAN.md`, `ISSUES_AND_GAPS.md` | `OpenTrialReporting/arsworks` |
+| R code in `arsstudio/` (Shiny app) | `OpenTrialReporting/arsstudio` |
+| `bootstrap.R`, `setup.R`, `sync_and_load.R`, `renv.lock`, `README.md`, `AGENTS.md`, `MASTER_PLAN.md`, `ISSUES_AND_GAPS.md` | `OpenTrialReporting/arsworks` |
 
 Once a submodule PR merges, open a follow-up PR against `arsworks` that bumps
 the submodule pointer to the new upstream commit (`git add <submodule>` after
@@ -32,7 +33,7 @@ running `git submodule update --remote`).
    ```
 2. Open `arsworks.Rproj` in RStudio / Positron.
 3. Run `source("bootstrap.R")` to install dependencies and local packages in
-   the correct order (`arscore` → `arsshells` / `arsresult` → `arstlf` → `ars`).
+   the correct order (`arscore` → `arsshells` / `arsresult` → `arstlf` → `ars` → `arsstudio`).
 4. Run `source("sync_and_load.R")` to pull submodule updates and reload.
 
 ## Coding standards

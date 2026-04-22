@@ -31,7 +31,7 @@ message(sprintf("  Project root: %s\n", ROOT))
 
 message("── Step 1: Git submodules ───────────────────────────────────────────────")
 
-submodules <- c("arscore", "arsshells", "arsresult", "arstlf", "ars")
+submodules <- c("arscore", "arsshells", "arsresult", "arstlf", "ars", "arsstudio")
 
 populated <- vapply(submodules, function(pkg) {
   path <- file.path(ROOT, pkg)
@@ -119,7 +119,7 @@ if (!patched) {
 message("\n── Step 3: Restoring CRAN packages via renv ────────────────────────────")
 message("  (The five local packages are excluded here; installed in Step 4.)\n")
 
-local_pkgs <- c("ars", "arscore", "arsshells", "arsresult", "arstlf")
+local_pkgs <- c("ars", "arscore", "arsshells", "arsresult", "arstlf", "arsstudio")
 lock        <- renv::lockfile_read(file = lock_path)
 cran_pkgs   <- setdiff(names(lock$Packages), local_pkgs)
 
@@ -128,11 +128,11 @@ renv::restore(packages = cran_pkgs, prompt = FALSE)
 # ── Step 4: Install local packages in dependency order ───────────────────────
 #
 # Dependency order:
-#   arscore  →  arsshells, arsresult  →  arstlf  →  ars
+#   arscore  →  arsshells, arsresult  →  arstlf  →  ars  →  arsstudio
 
 message("\n── Step 4: Installing local packages ───────────────────────────────────")
 
-install_order <- c("arscore", "arsshells", "arsresult", "arstlf", "ars")
+install_order <- c("arscore", "arsshells", "arsresult", "arstlf", "ars", "arsstudio")
 
 for (pkg in install_order) {
   path <- file.path(ROOT, pkg)

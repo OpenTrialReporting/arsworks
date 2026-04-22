@@ -30,7 +30,7 @@ setup <- function(force_bootstrap = FALSE,
     error = function(e) normalizePath(getwd())
   )
 
-  PACKAGES <- c("arscore", "arsshells", "arsresult", "arstlf", "ars")
+  PACKAGES <- c("arscore", "arsshells", "arsresult", "arstlf", "ars", "arsstudio")
 
   message("arsworks setup")
   message(sprintf("  Project root: %s", ROOT))

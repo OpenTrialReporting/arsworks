@@ -27,7 +27,7 @@ Each entry is tagged:
 
 arscore adds `IS_NULL` and `NOT_NULL` as extensions to support null-value checks in analysis set and data subset conditions (e.g., "exclude subjects with missing baseline"). These are semantically necessary but not part of the v1 spec.
 
-**Workaround in `ars_explorer.R`:** `.strip_ars_extensions()` replaces `IS_NULL` with `EQ ""` and `NOT_NULL` with `NE ""` in the JSON copy used for schema validation. The actual arscore objects and Layers 1/3 are unaffected.
+**Workaround in `arsstudio` (`R/helpers-serialize.R`):** `.strip_ars_extensions()` replaces `IS_NULL` with `EQ ""` and `NOT_NULL` with `NE ""` in the JSON copy used for schema validation. The actual arscore objects and Layers 1/3 are unaffected.
 
 **Affected shells:** Any shell with a data subset or analysis set condition that uses `IS_NULL` or `NOT_NULL`. Currently observed in T-LB-01 and T-LB-02.
 
@@ -41,7 +41,7 @@ arscore adds `IS_NULL` and `NOT_NULL` as extensions to support null-value checks
 
 **Cause:** The CDISC JSON Schema (Draft-07) marks `mainListOfContents` as required at the root of every `ReportingEvent`. arscore treats it as optional (consistent with the human-readable spec text, which says "should").
 
-**Workaround in `ars_explorer.R`:** `.auto_main_loc(re)` generates a flat `ListOfContents` enumerating all analyses before schema validation and before the "Full ARS with results" export.
+**Workaround in `arsstudio` (`R/helpers-reporting.R`):** `.auto_main_loc(re)` generates a flat `ListOfContents` enumerating all analyses before schema validation and before the "Full ARS with results" export.
 
 ---
 
@@ -53,7 +53,7 @@ arscore adds `IS_NULL` and `NOT_NULL` as extensions to support null-value checks
 
 The CDISC schema uses `additionalProperties: false`, so these fields cause Layer 2 failures.
 
-**Workaround in `ars_explorer.R`:** `.strip_ars_extensions()` removes both fields from the JSON copy before schema validation.
+**Workaround in `arsstudio` (`R/helpers-serialize.R`):** `.strip_ars_extensions()` removes both fields from the JSON copy before schema validation.
 
 **Recommended action:** Propose `isTotal` and `groupId` as additions to the v2 spec. Both fill genuine gaps in the v1 model.
 
@@ -70,8 +70,8 @@ Every scalar that the method produces (`OP_MEAN`, `OP_SD`, `OP_MIN`, `OP_MAX`, `
 `OP_MEDIAN`) is now a formally declared operation. The ARD contains only declared
 operation IDs; `validate_reporting_event()` accepts the embedded results without filtering.
 
-The `.embed_ard_into_re()` pre-filter in `ars_explorer.R` has been removed; the comment
-confirms "No pre-filter is needed". `arstlf` composes display cells at render time via
+The `.embed_ard_into_re()` pre-filter in `arsstudio` (`R/helpers-reporting.R`) has been
+removed; the comment confirms "No pre-filter is needed". `arstlf` composes display cells at render time via
 `frmt_combine()` keyed on the flat anchor ops (`OP_MEAN` → "mean (SD)", `OP_MIN` →
 "min, max") using the `.combined_ops` registry in `prep_ard.R`.
 
@@ -113,7 +113,7 @@ The PIN path already guarded against this (§2.4 — analysis-variable-matching 
 
 ### 3.1 `ars::run()` Shell detection used `inherits()` instead of `S7::S7_inherits()`  `[BUG-FIXED]`
 
-**Symptom:** Clicking "Get ARD" in ARS Explorer produced:
+**Symptom:** Clicking "Get ARD" in ARS Studio (then ARS Explorer) produced:
 ```
 ARD error: `re` must be an <arscore::ars_reporting_event>
 ```
@@ -132,14 +132,14 @@ if (inherits(re, "arsshells::Shell")) { ... }
 
 ### 3.2 ANSI escape codes displayed as raw text in Shiny notifications  `[BUG-FIXED]`
 
-**Symptom:** Error and warning notifications in ARS Explorer showed raw ANSI escape sequences:
+**Symptom:** Error and warning notifications in ARS Studio (then ARS Explorer) showed raw ANSI escape sequences:
 ```
 ARD error: [38;5;232m`re` must be an [34m<arscore::ars_reporting_event>
 ```
 
 **Cause:** `cli` formats all messages with ANSI colour sequences. `conditionMessage()` returns those sequences as-is. Shiny's `showNotification()` and `tags$pre()` render them as literal characters.
 
-**Fix:** Added `.strip_ansi <- function(x) cli::ansi_strip(x)` and applied it at all 7 notification/card message sites in `ars_explorer.R`.
+**Fix:** Added `.strip_ansi <- function(x) cli::ansi_strip(x)` (now in `arsstudio/R/helpers-serialize.R`) and applied it at all 7 notification/card message sites in the module server.
 
 ---
 
@@ -185,7 +185,7 @@ Each SOC row in the rendered table showed its count repeated once per PT in that
 
 ---
 
-## 4. ARS Explorer Validation Notes
+## 4. ARS Studio Validation Notes
 
 ### 4.1 Layer 2 failures that are expected and handled
 

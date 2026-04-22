@@ -13,3 +13,6 @@
 [submodule "arstlf"]
 	path = arstlf
 	url = https://github.com/OpenTrialReporting/arstlf.git
+[submodule "arsstudio"]
+	path = arsstudio
+	url = https://github.com/OpenTrialReporting/arsstudio.git

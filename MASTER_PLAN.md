@@ -174,8 +174,8 @@ Confirmed all components of the §21 flat operations refactor are in place:
 - `arstlf/R/prep_ard.R`: `.combined_ops` registry maps `OP_MEAN→[OP_MEAN,OP_SD]`
   and `OP_MIN→[OP_MIN,OP_MAX]`; `expand_combined_params()` exported.
 - `arstlf/R/render_tfrmt.R`: `frmt_combine()` keyed on `OP_MIN` and `OP_MEAN`.
-- `ars_explorer.R` `.embed_ard_into_re()`: Pre-filter removed; comment confirms
-  "No pre-filter needed" since all ops are now formally declared.
+- `arsstudio/R/helpers-reporting.R` `.embed_ard_into_re()`: Pre-filter removed;
+  comment confirms "No pre-filter needed" since all ops are now formally declared.
 
 **End-to-end validation:** T-LB-01 hydrated (7 PARAMCDs, 3 arms) → run → render
 produces 1,344 ARD rows with operation IDs `{OP_COUNT, OP_MAX, OP_MEAN, OP_MEDIAN,
@@ -261,8 +261,9 @@ dataSubsetId filter is applied").  All 228 arsresult tests pass.
 
 `stdlib.R` — `OP_MEAN_SD`/`OP_RANGE` removed; flat `OP_MEAN`, `OP_SD`, `OP_MIN`,
 `OP_MAX` registered individually.  `T-DM-01.json` and `T-LB-01.json` updated to
-use flat operation IDs in cell references.  `ars_explorer.R`
-`.embed_ard_into_re()` pre-filter removed (comment: "No pre-filter is needed").
+use flat operation IDs in cell references.  `arsstudio`
+(`R/helpers-reporting.R`) `.embed_ard_into_re()` pre-filter removed
+(comment: "No pre-filter is needed").
 
 **Leftover (arstlf tests):** 3 tests in `arstlf/tests/testthat/test-prep_ard.R`
 were not updated when `OP_MEAN` became a combined display anchor.  They expect
@@ -1446,9 +1447,13 @@ RACE rows, and the custom title.
 
 ---
 
-## 19. ARS Explorer — App Architecture
+## 19. ARS Studio — App Architecture
 
-`ars_explorer.R` is a self-contained Shiny module (`arsExplorerUI` / `arsExplorerServer`) that exposes the full pipeline interactively.
+`arsstudio` (`OpenTrialReporting/arsstudio`, 6th submodule) packages the
+Shiny module (`arsStudioUI` / `arsStudioServer`) and a standalone launcher
+(`run_studio()`) that expose the full pipeline interactively. The module
+was previously a single top-level file (`ars_explorer.R`); it was
+promoted to its own package in 2026-04.
 
 ### 19.1 Execution pipeline
 
@@ -1524,7 +1529,7 @@ The normalisation is applied to the JSON **copy used for schema validation only*
 
 `cli` error and warning messages contain ANSI escape sequences (e.g. `\033[38;5;232m`).  Shiny renders these as raw text in `showNotification()` and `tags$pre()`.
 
-All notification and card message sites in `ars_explorer.R` wrap `conditionMessage()` with `.strip_ansi()`:
+All notification and card message sites in `arsstudio/R/module-server.R` wrap `conditionMessage()` with `.strip_ansi()` (defined in `arsstudio/R/helpers-serialize.R`):
 
 ```r
 .strip_ansi <- function(x) cli::ansi_strip(x)
@@ -1678,7 +1683,7 @@ rather than expecting pre-composed operation IDs.
 | `arsshells` | `inst/templates/tables/T-VS-01.json` (and any new templates) | Define flat from the start |
 | `arsshells` | `R/hydrate.R` shell cell linking | Update any cell → operation links that reference composite IDs |
 | `arstlf` | `R/render.R` / tfrmt spec builder | Replace `frmt_combine()` references to `OP_MEAN_SD` / `OP_RANGE` with two-scalar compose |
-| `ars_explorer.R` | `.embed_ard_into_re()` | Pre-filter becomes unnecessary once all operations are declared; can be simplified or removed |
+| `arsstudio` | `R/helpers-reporting.R::.embed_ard_into_re()` | Pre-filter becomes unnecessary once all operations are declared; can be simplified or removed |
 | Tests | All packages | Update expected operation IDs and ARD shapes |
 
 ### Migration notes

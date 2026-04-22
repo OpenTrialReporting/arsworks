@@ -30,7 +30,7 @@ ROOT <- if (nchar(.src_path) > 0L && file.exists(.src_path)) {
 }
 rm(.src_path)
 
-PACKAGES <- c("arscore", "arsshells", "arsresult", "arstlf", "ars")
+PACKAGES <- c("arscore", "arsshells", "arsresult", "arstlf", "ars", "arsstudio")
 
 # ── 1. Pull latest from each sub-package repo ─────────────────────────────────
 
