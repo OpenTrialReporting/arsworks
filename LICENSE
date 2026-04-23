@@ -22,6 +22,6 @@ SOFTWARE.
 
 ---
 
-Each bundled submodule (ars, arscore, arsshells, arsresult, arstlf) is
-distributed under its own MIT license; see the LICENSE file in each
+Each bundled submodule (ars, arscore, arsshells, arsresult, arstlf, arsstudio)
+is distributed under its own MIT license; see the LICENSE file in each
 submodule directory for details.

@@ -1,7 +1,7 @@
 # arsworks — Known Issues and Gaps
 
 **Maintained by:** Lovemore Gakava  
-**Last updated:** 2026-04-21  
+**Last updated:** 2026-04-23  
 **Scope:** Issues confirmed against the live codebase; workarounds in place unless marked otherwise.
 
 Each entry is tagged:
@@ -227,7 +227,7 @@ This entry is retained as a diagnostic guide.
 | ~~OI-04~~ | ~~arsshells~~ | ~~`validate_shell()` does not call `validate_reporting_event()` internally~~ | ~~Medium~~ | **RESOLVED** — `validate_shell()` now checks the full reference chain: `analysis_set_id`, `data_subset_id`, `ordered_groupings` (grouping_id + group_id), and all `ShellCell` refs. |
 | OI-05 | arstlf | RTF/PDF export quality from the tfrmt backend is untested. HTML is reliable; RTF needs audit before production use. | Medium |
 | ~~OI-06~~ | ~~arsresult / arsshells~~ | ~~`referencedOperationRelationships` not declared on percentage operations — denominator linkage invisible to the ARS model.~~ | ~~Medium~~ | **RESOLVED** — Declared in all 4 templates; `AN_HDR_N` denominator analysis added to each. See below. |
-| OI-07 | arsresult / arscore | `resultsByGroup: false` pattern not supported — blocks all CSD comparison methods (Chi-sq, ANOVA, Fisher exact). See below. | Medium |
+| ~~OI-07~~ | ~~arsresult / arscore~~ | ~~`resultsByGroup: false` pattern not supported — blocks all CSD comparison methods (Chi-sq, ANOVA, Fisher exact).~~ | ~~Medium~~ | **RESOLVED** — 2026-02-28. `ars_result_group` validator relaxed; `.resolve_grouping_filter()` returns groupingId-only result_group; METH_CHISQ, METH_ANOVA, METH_FISHER added to stdlib. See below. |
 | ~~OI-08~~ | ~~arsresult~~ | ~~`dataSubsetId` filtering in `run()` unverified — may be silently ignored for some analysis patterns.~~ | ~~Medium~~ | **RESOLVED** — Implemented and tested in both paths. See below. |
 
 ---
@@ -340,7 +340,9 @@ are all in place. This is **template JSON work only** — no code changes needed
 
 ---
 
-### OI-07 — `resultsByGroup: false` pattern not supported  `[DEFERRED]`
+### ~~OI-07~~ — `resultsByGroup: false` pattern not supported  `[BUG-FIXED]`
+
+**Resolved 2026-02-28.**
 
 **Affected packages:** `arsresult`, `arscore`
 
@@ -355,23 +357,20 @@ groupings and emit a **single** result whose `resultGroups` carry only a
 | `Mth04_ContVar_Comp_Anova` | One-way ANOVA p-value |
 | `Mth05_CatVar_Comp_FishEx` | Fisher exact test p-value |
 
-Current blockers:  
-- `arsresult::run()` always writes a `groupId` on every result row; the
-  no-`groupId` result pattern is not handled.  
-- `ars_operation_result` (arscore S7 class) requires `groupId` to be non-empty
-  in each `resultGroup`; it must be made optional (`default = ""`).  
-- `stdlib.R` has no comparison methods; Chi-square, ANOVA, and Fisher exact
-  functions need to be added.  
-- `arstlf` render path assumes each result row maps to an arm column;
-  a single-row comparison result (p-value) needs a separate tfrmt / gt
-  geometry.
+**Resolution:**  
+- `ars_result_group` validator in arscore relaxed so `groupId` is optional
+  when `resultsByGroup: false`.
+- `arsresult::.resolve_grouping_filter()` returns a groupingId-only
+  `result_group` for comparison analyses, and sets a `comparison_vars`
+  attribute on the data.
+- `stdlib.R` gained `METH_CHISQ`, `METH_ANOVA`, and `METH_FISHER` methods.
+- All 2348 tests pass; 0 failures.
 
-**Impact:**  
-No p-value or inferential comparison analyses can be produced until this is
-resolved. All CSD tables that include a p-value column (T-DM-01, T-AE-03,
-efficacy tables) are structurally incomplete.
+**Remaining deferred work:**  
+Rendering comparison rows in a dedicated p-value column is still deferred to
+the arstlf `gt` backend / T-EF-01 sprint. The ARD layer is complete.
 
-**Tracking:** `MASTER_PLAN.md §20` (arsresult backlog).
+**Tracking:** `MASTER_PLAN.md §20` (arsresult backlog) — marked COMPLETE.
 
 ---
 

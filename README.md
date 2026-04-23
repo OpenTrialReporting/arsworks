@@ -41,15 +41,15 @@ loads, builds the example tables, and runs UAT checks.
 
 | Phase | What it does | When it runs |
 |-------|--------------|--------------|
-| Bootstrap | Submodule init, `renv::restore()`, install 5 local packages | Only when the environment is stale (see below) |
-| Sync & load | `devtools::document()` + `load_all()` on all 5 sub-packages | Every time |
+| Bootstrap | Submodule init, `renv::restore()`, install 6 local packages | Only when the environment is stale (see below) |
+| Sync & load | `devtools::document()` + `load_all()` on all 6 sub-packages | Every time |
 | Examples | Builds `adsl`/`adae`/`adlb` and renders all 6 shells | Every time (skippable) |
 | UAT checks | §22 ARD + render-level checks across all shells | Every time (skippable) |
 
 **Bootstrap auto-triggers when any of the following is true:**
 
 - A submodule directory is empty (fresh clone without `--recurse-submodules`)
-- One of the five local packages is not installed
+- One of the six local packages is not installed
 - An installed local package's version differs from its `DESCRIPTION`
   (submodule pointer was bumped — reinstall needed)
 - `renv::status()` reports missing CRAN packages (environment drift)
@@ -86,6 +86,8 @@ arsresult  ← Execution engine: WhereClause transpiler + method registry
 arstlf     ← Translator: ARS metadata + ARD → publication TLFs
     ↓
 ars        ← Orchestrator: pipe-friendly workflow API
+    ↓
+arsstudio  ← Shiny UI: interactive browser for the full pipeline
 ```
 
 Each package lives in its own GitHub repository under the
@@ -100,6 +102,7 @@ together.
 | `arsresult` | [OpenTrialReporting/arsresult](https://github.com/OpenTrialReporting/arsresult) | Execution engine |
 | `arstlf` | [OpenTrialReporting/arstlf](https://github.com/OpenTrialReporting/arstlf) | Rendering backends |
 | `ars` | [OpenTrialReporting/ars](https://github.com/OpenTrialReporting/ars) | Workflow API |
+| `arsstudio` | [OpenTrialReporting/arsstudio](https://github.com/OpenTrialReporting/arsstudio) | Interactive Shiny studio |
 
 ---
 
@@ -111,7 +114,7 @@ Start each session with:
 source("setup.R")
 ```
 
-This loads all five packages and creates `adsl`, `adae`, `adlb` in your
+This loads all six packages and creates `adsl`, `adae`, `adlb` in your
 session (plus `ard_dm01`, …, `ard_lb02` and `gt_dm01`, …, `gt_lb02` from
 the examples + UAT checks). Skip the UAT step with `setup(skip_uat = TRUE)`
 if you just want the data and rendered tables.
@@ -208,7 +211,7 @@ by opening `renv.lock`, finding the `"ars"` block, and changing
 
 ### A sub-package fails to install with "dependencies not available"
 
-The five packages must be installed in dependency order. The bootstrap script
+The six packages must be installed in dependency order. The bootstrap script
 handles this. If you are installing manually, use this order:
 
 ```r
@@ -217,6 +220,7 @@ devtools::install("arsshells")
 devtools::install("arsresult")
 devtools::install("arstlf")
 devtools::install("ars")
+devtools::install("arsstudio")
 ```
 
 ---

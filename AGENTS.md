@@ -6,7 +6,7 @@ Context guide for AI coding assistants and human contributors working on the ARS
 
 ## Package Overview
 
-**arsworks** is a monorepo of 5 interdependent R packages that implement CDISC ARS (Analysis Results Standards) v1.0 for clinical table generation and reporting.
+**arsworks** is a monorepo of 6 interdependent R packages that implement CDISC ARS (Analysis Results Standards) v1.0 for clinical table generation and reporting.
 
 **Packages (in dependency order):**
 1. **arscore** — Foundation: data structures, validation, base classes
@@ -14,6 +14,7 @@ Context guide for AI coding assistants and human contributors working on the ARS
 3. **arsresult** — Executor: transpiles conditions, executes methods on data
 4. **arstlf** — Translator: ARD → tfrmt/gt → publication-ready tables
 5. **ars** — Orchestrator: pipe API, bundled datasets, end-user entry point
+6. **arsstudio** — Shiny UI: interactive browser for the full hydrate/run/render pipeline
 
 ## CDISC & Clinical Standards
 
@@ -255,5 +256,5 @@ For AI strategy discussion across the {admiral} ecosystem:
 
 ---
 
-*Last updated: 2026-03-31*  
+*Last updated: 2026-04-23*  
 *For AI-assisted development in the pharmaverse ecosystem*
