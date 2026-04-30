@@ -1,7 +1,7 @@
 # arsworks — Known Issues and Gaps
 
 **Maintained by:** Lovemore Gakava  
-**Last updated:** 2026-04-23  
+**Last updated:** 2026-04-30  
 **Scope:** Issues confirmed against the live codebase; workarounds in place unless marked otherwise.
 
 Each entry is tagged:
@@ -35,13 +35,15 @@ arscore adds `IS_NULL` and `NOT_NULL` as extensions to support null-value checks
 
 ---
 
-### 1.2 `mainListOfContents` required by schema but optional in arscore  `[CDISC-GAP]`
+### 1.2 `mainListOfContents` required by schema but optional in arscore  `[CDISC-GAP]` `[ADDRESSED]`
 
 **Symptom:** Layer 2 may fail with a `mainListOfContents` missing error if the reporting event is serialised without one.
 
 **Cause:** The CDISC JSON Schema (Draft-07) marks `mainListOfContents` as required at the root of every `ReportingEvent`. arscore treats it as optional (consistent with the human-readable spec text, which says "should").
 
-**Workaround in `arsstudio` (`R/helpers-reporting.R`):** `.auto_main_loc(re)` generates a flat `ListOfContents` enumerating all analyses before schema validation and before the "Full ARS with results" export.
+**Status (2026-04-23):** Addressed in arscore via opt-in **strict mode**. The default `validate_reporting_event(re)` still tolerates `NULL`, but `validate_reporting_event(re, strict = TRUE)` enforces the schema-literal requirement. Callers preparing output for an external ARS-compliant consumer should pass `strict = TRUE` before serialising. The deliberate divergence is documented on `ars_reporting_event` (roxygen "Deliberate schema divergence") and in `arscore/SCHEMA_CONFORMANCE.md` §3.7.
+
+**Workaround in `arsstudio` (`R/helpers-reporting.R`):** `.auto_main_loc(re)` generates a flat `ListOfContents` enumerating all analyses before schema validation and before the "Full ARS with results" export. Still active so existing arsstudio fixtures work without modification; downstream consumers can also rely on strict mode going forward.
 
 ---
 

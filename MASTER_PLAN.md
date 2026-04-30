@@ -1546,16 +1546,26 @@ current rework but must not be lost. Grouped by package.
 
 ### arscore
 
+**Resolved since the original backlog (≤ 2026-04-30):**
+
+- ~~Warn on unreferenced methods and unused groupings~~ — `validate_reporting_event()` now emits non-fatal `cli_warn` calls for defined-but-unreferenced methods, groupings, analysis sets, and data subsets.
+- ~~Validate `ordered_groupings` reference valid reporting event groupings~~ — `validate_reporting_event()` checks `ordered_groupings[].grouping_id` and `ordered_groupings[]` with `results_by_group = TRUE` against prespecified grouping factors.
+- ~~Integration test: realistic multi-analysis RE round-trip~~ — covered by `tests/testthat/test-integration.R` (build → validate → JSON → reimport → byte-equality).
+- ~~`format()` improvements for `ars_method`, `ars_output`, `ars_analysis`~~ — `format()` methods now exist on 34 classes; coverage in `test-format-ars_method.R`, `test-format-ars_output.R`, `test-format-ars_analysis.R`.
+- ~~arscore vignette: "JSON Round-Trip and Validation"~~ (was listed under cross-cutting) — JSON round-trip + validation are demonstrated end-to-end in both `vignettes/getting-started.Rmd` and `vignettes/complete-reporting-event.Rmd`.
+- Schema conformance audit + opt-in strict mode for `validate_reporting_event(strict = TRUE)` (2026-04-23). See `arscore/SCHEMA_CONFORMANCE.md`.
+- `enrich_ard()` exported helper that joins analysis-, group-, and method-level metadata onto an ARD.
+
+**Still open:**
+
 | Item | Priority | Notes |
 |------|----------|-------|
-| Warn on unreferenced methods and unused groupings | Medium | `validate_reporting_event()` enhancement |
-| Validate `ordered_groupings` reference valid reporting event groupings | Medium | Currently unchecked |
-| Integration test: realistic multi-analysis RE round-trip (build → validate → JSON → reimport → equality) | Medium | End-to-end confidence |
 | Property-based / fuzzing tests for validators | Low | Long-term robustness |
 | Coverage measurement with `covr` | Low | Identify untested paths |
-| `format()` improvements for `ars_method`, `ars_output`, `ars_analysis` | Low | Show operation IDs / display names inline; pattern set by `ars_document_reference` |
 | Package logo | Low | Cosmetic |
 | Emit `@type: "ReportingEvent"` from `reporting_event_to_json()` | Low | CSD root object carries `@type` as metadata. Confirmed **not** a source of Layer 2 schema failures: `@type` does not appear anywhere in the CDISC JSON Schema, and the root schema sets `additionalProperties: true` so the field is harmless either way. Add for completeness / CSD alignment only. |
+| Tighten validators on schema-required auxiliary fields (`level`, `order`, `name`, `text`) | Low | See `arscore/SCHEMA_CONFORMANCE.md` §3.6 — eight minor gaps where arscore tolerates `NA` for fields the schema marks required. Each is a 1-line `.require_nonempty()` addition. |
+| Normalise `class_any` → `class_character` in the backtick-message-style class family | Low | See `arscore/SCHEMA_CONFORMANCE.md` §3.2 Pattern C — style cleanup affecting `ars_code_parameter`, `ars_code_template`, `ars_programming_code`, `ars_template_code_parameter`, `ars_sponsor_term`. |
 
 ### arsshells — template library expansion
 
@@ -1617,7 +1627,6 @@ See `arsshells/REFERENCE.md` for the full 55-shell inventory.
 | Item | Priority | Notes |
 |------|----------|-------|
 | `AGENTS.md` / memory files — keep in sync with MASTER_PLAN.md §0 | Ongoing | Run `/memory` update after any §0 change |
-| arscore vignette: "JSON Round-Trip and Validation" | Low | Currently missing; `complete-reporting-event` vignette exists |
 
 ---
 
