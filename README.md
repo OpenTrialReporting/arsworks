@@ -263,22 +263,31 @@ always reflects a set of package versions known to work together.
 
 ```
 arsworks/
-├── ars/                  ← submodule → OpenTrialReporting/ars
-├── arscore/              ← submodule → OpenTrialReporting/arscore
-├── arsshells/            ← submodule → OpenTrialReporting/arsshells
-├── arsresult/            ← submodule → OpenTrialReporting/arsresult
-├── arstlf/               ← submodule → OpenTrialReporting/arstlf
-├── .gitmodules           ← submodule URL registry
-├── renv.lock             ← pinned R package environment
-├── renv/                 ← renv activation scripts
-├── arsworks.Rproj        ← RStudio project file
-├── setup.R               ← smart entry point: auto-bootstrap + sync + examples + UAT
-├── bootstrap.R           ← one-shot setup (called by setup.R when needed)
-├── sync_and_load.R       ← session loader (called by setup.R)
-├── data_table_examples.R ← test data + all 6 tables (called by setup.R)
-├── uat_checks.R          ← §22 UAT checks (called by setup.R)
-├── MASTER_PLAN.md
-└── MAKE_TEST_DATA.md
+├── arscore/                  ← submodule → OpenTrialReporting/arscore   (data model)
+├── arsshells/                ← submodule → OpenTrialReporting/arsshells (templates + hydration)
+├── arsresult/                ← submodule → OpenTrialReporting/arsresult (execution engine)
+├── arstlf/                   ← submodule → OpenTrialReporting/arstlf    (rendering)
+├── ars/                      ← submodule → OpenTrialReporting/ars       (workflow API)
+├── arsstudio/                ← submodule → OpenTrialReporting/arsstudio (Shiny UI)
+├── model/
+│   └── ars_ldm.json          ← CDISC ARS v1.0 JSON schema (used by arscore audit)
+├── Common Safety Displays.json ← CSD reference data (used by template work)
+├── .gitmodules               ← submodule URL registry
+├── renv.lock                 ← pinned R package environment
+├── renv/                     ← renv activation scripts
+├── arsworks.Rproj            ← RStudio project file
+├── Dockerfile                ← reproducible build image
+├── setup.R                   ← smart entry point: auto-bootstrap + sync + examples + UAT
+├── bootstrap.R               ← one-shot setup (called by setup.R when needed)
+├── sync_and_load.R           ← session loader (called by setup.R)
+├── data_table_examples.R     ← test data + all 6 tables (called by setup.R)
+├── uat_checks.R              ← §22 UAT checks (called by setup.R)
+├── README.md                 ← this file
+├── AGENTS.md                 ← context guide for AI / human contributors
+├── CONTRIBUTING.md           ← where PRs go (submodule repos vs. arsworks)
+├── ISSUES_AND_GAPS.md        ← live tracker of known issues + workarounds
+├── MASTER_PLAN.md            ← cross-package design + sprint log
+└── LICENSE                   ← MIT
 ```
 
 ---

@@ -462,7 +462,7 @@ run(adam = list(ADAE = adae_teae, ADSL = adsl))
 
 ---
 
-## 0. Current State (as of 2026-02-22, updated 2026-02-28 — §23 CSD compact pattern migration complete)
+## 0. Current State (as of 2026-04-30 — arscore strict mode + UML diagram tool, vignette refresh)
 
 ### Suite overview
 
@@ -476,17 +476,24 @@ arsresult  ← Executor: Method Registry + WhereClause transpiler → ARD from A
 arstlf     ← Translator: arscore display metadata + ARD → tfrmt / gt → TLF files
     ↓
 ars        ← Orchestrator: pipe-friendly workflow API, selective re-exports
+    ↓
+arsstudio  ← Shiny UI: interactive browser for the full hydrate/run/render pipeline
 ```
 
 ### Per-package status
 
-| Package | Version | Tests | Status |
-|---------|---------|-------|--------|
-| arscore | v0.1.0 | 1343 pass | ✅ All tasks complete; `validate_ordered_groupings` reference check added (Task 4) |
-| arsshells | v0.1.0 | 534 pass | ✅ Phase A1–A7 + Phase B1–B7 complete; T-LB-01/02 refactored to prototypes; section_map (Mode 2+3) in hydrate(); T-DM-01/T-AE-01/T-DS-01 migrated to CSD compact pattern (§23); test-use_shell.R updated for new analysis/cell counts |
-| arsresult | v0.1.0 | 272 pass (1 expected warn) | ✅ Phase A8–A11 complete; flat ops, expand path, PIN-path cache; fast-path tests 6–8 |
-| arstlf | v0.1.0 | 115 pass | ✅ `cell_row_label` fix in `prep_ard.R` (§23); regression tests for expand-path row label preservation |
-| ars | v0.1.0 | 54 pass | ✅ Task 6 complete; `setup.R` path fixed; test-pipe.R rewritten; **Phase C complete** — bundled datasets, `R/data.R`, `LazyData: true`, README Quick Start, getting-started vignette |
+Test counts measured 2026-04-30 (`devtools::test_local()` per package).
+
+| Package | Version | Tests / Expectations | Status |
+|---------|---------|----------------------|--------|
+| arscore | 0.1.0.9000 | 646 / 1,414 pass | ✅ Schema audit, opt-in `strict = TRUE`, validator-helper extraction, `enrich_ard()`, `format_result_pattern()`, vignettes refreshed, interactive UML class diagram tool. |
+| arsshells | 0.1.0 | 250 / 550 pass | ✅ Phase A1–A7 + Phase B1–B7 complete; T-LB-01/02 refactored to prototypes; section_map (Mode 2+3) in hydrate(); T-DM-01/T-AE-01/T-DS-01 migrated to CSD compact pattern (§23); test-use_shell.R updated for new analysis/cell counts. |
+| arsresult | 0.1.0 | 173 / 323 pass | ✅ Phase A8–A11 complete; flat ops, expand path, PIN-path cache; fast-path tests 6–8; OI-07 comparison methods (Chi-sq, ANOVA, Fisher) in stdlib. |
+| arstlf | 0.1.0.9000 | 62 / 122 pass | ✅ `cell_row_label` fix in `prep_ard.R` (§23); regression tests for expand-path row label preservation; `render_mock` indent padding fix. |
+| ars | 0.1.0 | 30 / 62 pass | ✅ Task 6 complete; `setup.R` path fixed; test-pipe.R rewritten; **Phase C complete** — bundled datasets, `R/data.R`, `LazyData: true`, README Quick Start, getting-started vignette; `validate_reporting_event(strict=)` parameter documented on the re-export. |
+| arsstudio | 0.1.0 | 2 / 6 pass | ✅ Shiny app shipping; OI-07 verification pass complete; full hydrate/run/render pipeline browseable interactively. (Test suite is intentionally minimal — the package is exercised manually via the app.) |
+
+**Suite-wide totals:** 1,163 tests, 2,477 expectations, 0 failures.
 
 ### Completed work by package
 
@@ -525,7 +532,17 @@ at render time, vignette, pkgdown, GitHub Actions.
 
 **ars** — `ars_pipeline()`, selective re-exports of the full workflow API,
 `ArsResult` S3 class enabling the clean pipe pattern, unit + integration tests,
-vignettes, pkgdown, GitHub Actions.
+vignettes, pkgdown, GitHub Actions. `validate_reporting_event(strict=)`
+parameter documented on the re-export (2026-04-30).
+
+**arsstudio** — Shiny module-based UI for the full pipeline. Browse
+installed shells, hydrate them interactively (variable_map, group_map,
+subset_map, metadata, section_map), execute against ADaM data, and
+preview the rendered TLF in-app. Validation pipeline (Layers 1/2/3) with
+ANSI-stripped notifications; `.strip_ars_extensions()` and
+`.auto_main_loc()` handle the documented arscore-vs-schema deviations
+when serialising for external schema validators (see §1.1–1.3 of
+`ISSUES_AND_GAPS.md`). pkgdown, GitHub Actions.
 
 ### Installed templates (6 / 55)
 
@@ -544,7 +561,7 @@ results for all arms from each single analysis.
 
 ### GitHub Pages
 
-All 5 repos are currently **private**. pkgdown workflows build the site and
+All 6 repos are currently **private**. pkgdown workflows build the site and
 upload it as a downloadable Actions artifact on every push to `main`.
 
 To enable live hosting when repos go public:
