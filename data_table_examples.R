@@ -49,7 +49,7 @@ adsl$DCSREAS[other_disc] <- rep_len(disc_reasons, length(other_disc))
 
 # AETOXGR: derive from AESEV (template filters on numeric grade strings)
 # MILD -> "1", MODERATE -> "2", SEVERE -> "3"
-adae$AETOXGR <- dplyr::case_match(
+adae$AETOXGR <- dplyr::recode_values(
   adae$AESEV,
   "MILD"     ~ "1",
   "MODERATE" ~ "2",
