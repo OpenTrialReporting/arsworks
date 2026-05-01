@@ -462,7 +462,7 @@ run(adam = list(ADAE = adae_teae, ADSL = adsl))
 
 ---
 
-## 0. Current State (as of 2026-05-01 — arsresult + arstlf docs refresh: §21 flat-ops, OI-06/OI-07/OI-08, expand-path, ars_save_rtf, NBSP indenting)
+## 0. Current State (as of 2026-05-01 — arsresult + arstlf + ars docs refresh: §21 flat-ops, OI-06/OI-07/OI-08, expand-path, ars_save_rtf, ArsResult bundle, bundled ADaM data)
 
 ### Suite overview
 
@@ -1647,9 +1647,17 @@ See `arsshells/REFERENCE.md` for the full 55-shell inventory.
 
 ### ars
 
+**Resolved since the original backlog (≤ 2026-05-01):**
+
+- ~~Optional Shiny app (`R/ars_app.R`)~~ — Superseded by the standalone `arsstudio` package, which now provides interactive shell selection, hydration, mock preview, and full pipeline browsing on top of `ars`. `arsstudio` lives in its own submodule rather than as an embedded `ars_app.R` to keep `ars` lean for batch / scripting use.
+- ~~`ArsResult` bundle so `run() |> render()` pipes without manual shell threading~~ — Implemented (see `ars/R/ars_result.R`); `print.ArsResult` registered.
+- ~~`ars_pipeline()` covers the full hydrate-time argument surface (`group_map`, `value_map`, `subset_map`, `adam_hydrate`, `metadata`)~~ — Implemented post-0.1.0.
+- ~~Bundled synthetic ADaM datasets so README / vignette examples run out of the box~~ — `adsl`, `adae`, `adlb` shipped in Phase C.
+
+**Still open:**
+
 | Item | Priority | Notes |
 |------|----------|-------|
-| Optional Shiny app (`R/ars_app.R`) | Low | Interactive shell selection, hydration, mock preview |
 | Enable pkgdown GitHub Pages deployment when repos go public | Low | Uncomment deploy step; use org-scoped PAT |
 
 ### Cross-cutting
