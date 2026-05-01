@@ -462,7 +462,7 @@ run(adam = list(ADAE = adae_teae, ADSL = adsl))
 
 ---
 
-## 0. Current State (as of 2026-05-01 — arsresult + arstlf + ars docs refresh: §21 flat-ops, OI-06/OI-07/OI-08, expand-path, ars_save_rtf, ArsResult bundle, bundled ADaM data)
+## 0. Current State (as of 2026-05-01 — full suite docs refresh: arsresult + arstlf + ars + arsstudio walkthroughs all merged; suite-wide test counts 1,163 / 2,482 / 0)
 
 ### Suite overview
 
@@ -488,12 +488,12 @@ Test counts measured 2026-04-30 (`devtools::test_local()` per package).
 |---------|---------|----------------------|--------|
 | arscore | 0.1.0.9000 | 646 / 1,414 pass | ✅ Schema audit, opt-in `strict = TRUE`, validator-helper extraction, `enrich_ard()`, `format_result_pattern()`, vignettes refreshed, interactive UML class diagram tool. |
 | arsshells | 0.1.0 | 250 / 550 pass | ✅ Phase A1–A7 + Phase B1–B7 complete; T-LB-01/02 refactored to prototypes; section_map (Mode 2+3) in hydrate(); T-DM-01/T-AE-01/T-DS-01 migrated to CSD compact pattern (§23); test-use_shell.R updated for new analysis/cell counts. |
-| arsresult | 0.1.0 | 173 / 323 pass | ✅ Phase A8–A11 complete; flat ops, expand path, PIN-path cache; fast-path tests 6–8; OI-07 comparison methods (Chi-sq, ANOVA, Fisher) in stdlib. |
+| arsresult | 0.1.0 | 173 / 324 pass | ✅ Phase A8–A11 complete; flat ops, expand path, PIN-path cache; fast-path tests 6–8; OI-07 comparison methods (Chi-sq, ANOVA, Fisher) in stdlib. |
 | arstlf | 0.1.0.9000 | 62 / 122 pass | ✅ `cell_row_label` fix in `prep_ard.R` (§23); regression tests for expand-path row label preservation; `render_mock` indent padding fix. |
-| ars | 0.1.0 | 30 / 62 pass | ✅ Task 6 complete; `setup.R` path fixed; test-pipe.R rewritten; **Phase C complete** — bundled datasets, `R/data.R`, `LazyData: true`, README Quick Start, getting-started vignette; `validate_reporting_event(strict=)` parameter documented on the re-export. |
+| ars | 0.1.0 | 30 / 66 pass | ✅ Task 6 complete; `setup.R` path fixed; test-pipe.R rewritten; **Phase C complete** — bundled datasets, `R/data.R`, `LazyData: true`, README Quick Start, getting-started vignette; `validate_reporting_event(strict=)` parameter documented on the re-export. |
 | arsstudio | 0.1.0 | 2 / 6 pass | ✅ Shiny app shipping; OI-07 verification pass complete; full hydrate/run/render pipeline browseable interactively. (Test suite is intentionally minimal — the package is exercised manually via the app.) |
 
-**Suite-wide totals:** 1,163 tests, 2,477 expectations, 0 failures.
+**Suite-wide totals:** 1,163 tests, 2,482 expectations, 0 failures.
 
 ### Completed work by package
 
