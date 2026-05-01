@@ -462,7 +462,7 @@ run(adam = list(ADAE = adae_teae, ADSL = adsl))
 
 ---
 
-## 0. Current State (as of 2026-04-30 — arscore strict mode + UML diagram tool, vignette refresh)
+## 0. Current State (as of 2026-05-01 — arsresult docs refresh: §21 flat-ops, OI-06/OI-07/OI-08, expand-path / fast-path)
 
 ### Suite overview
 
@@ -1614,14 +1614,19 @@ See `arsshells/REFERENCE.md` for the full 55-shell inventory.
 
 ### arsresult
 
+**Resolved since the original backlog (≤ 2026-05-01):**
+
+- ~~`IS_NULL` / `NOT_NULL` comparator support~~ — `transpile_condition()` now supports both, treating `NA` and the empty string `""` as null (clinical ADaM datasets such as `ADSL.DCSREAS` use `""` for "no value"). See `arsresult/R/transpile.R:190–194`.
+- ~~**`dataSubsetId` runtime filtering in `arsresult::run()`**~~ — Verified working in `run()` step 4 (record-level filter applied via the named data-subset where-clause immediately before method dispatch). Confirmed by zero-row regression test in `arsresult/tests/testthat/test-run.R`.
+- ~~**Support `resultsByGroup: false` / no-`groupId` result pattern for comparison analyses**~~ — ✅ COMPLETE 2026-02-28 (OI-07). `ars_result_group` validator relaxed; `.resolve_grouping_filter()` returns groupingId-only result_group; `comparison_vars` attr set on data; METH_CHISQ, METH_ANOVA, METH_FISHER in stdlib. **Rendering** comparison rows in a dedicated p-value column is deferred to the arstlf `gt` backend / T-EF-01 sprint.
+- ~~**`referencedOperationRelationships` — formal denominator declaration for percentage operations**~~ — ✅ COMPLETE 2026-02-28 (OI-06). NUMERATOR + DENOMINATOR RORs declared on `OP_N_PCT` in all four methods (METH_CAT, METH_AE_FREQ ×2, METH_FREQ). `AN_HDR_N` denominator analysis added to each template; all analyses with `OP_N_PCT` wired with `referencedAnalysisOperations`. The denominator is still computed from `analysis_set_n` inside stdlib — driving computation from the declared relationship is a future enhancement.
+
+**Still open:**
+
 | Item | Priority | Notes |
 |------|----------|-------|
 | Additional stdlib methods: geometric mean, Kaplan–Meier, Cox HR | Medium | Needed for T-EF-04, survival tables |
 | Arrow / DuckDB integration tests | Medium | Backend-agnostic transpiler needs backend tests |
-| `IS_NULL` / `NOT_NULL` comparator support | Low | Rare in CDISC standards; log as known limitation until needed |
-| ~~**Support `resultsByGroup: false` / no-`groupId` result pattern for comparison analyses**~~ | ~~Medium~~ | ✅ **COMPLETE — 2026-02-28 (OI-07)**. `ars_result_group` validator relaxed; `.resolve_grouping_filter()` returns groupingId-only result_group; `comparison_vars` attr set on data; METH_CHISQ, METH_ANOVA, METH_FISHER in stdlib. **Rendering** comparison rows in a dedicated p-value column is deferred to the arstlf `gt` backend / T-EF-01 sprint. |
-| **`dataSubsetId` runtime filtering in `arsresult::run()`** | Medium | CSD attaches a named `dataSubset` to each analysis as a record-level pre-filter (e.g. `Dss01_TEAE`: `TRTEMFL=Y`); `run()` must apply this filter before executing the method. Note: T-AE-02 already sets `dataSubsetId` on every analysis, but its subsets bake in hardcoded SOC/PT terms as a workaround for missing data-driven grouping support — so `dataSubsetId` filtering may currently be silently ignored and T-AE-02 still passes tests via the `groupId` arm-pin.  Verify whether `run()` applies the filter at all before implementing. Once `dataSubsetId` filtering works, T-AE-02 can be migrated to the CSD pattern (single `TRTEMFL=Y` subset + data-driven groupings). |
-| ~~**`referencedOperationRelationships` — formal denominator declaration for percentage operations**~~ | ~~Medium~~ | ✅ **COMPLETE — 2026-02-28 (OI-06).** NUMERATOR + DENOMINATOR RORs declared on `OP_N_PCT` in all four methods (METH_CAT, METH_AE_FREQ ×2, METH_FREQ). `AN_HDR_N` denominator analysis added to each template; all analyses with `OP_N_PCT` wired with `referencedAnalysisOperations`. The denominator is still computed from `analysis_set_n` inside stdlib — driving computation from the declared relationship is a future enhancement. |
 
 ### arstlf
 

@@ -1,7 +1,7 @@
 # arsworks — Known Issues and Gaps
 
 **Maintained by:** Lovemore Gakava  
-**Last updated:** 2026-04-30  
+**Last updated:** 2026-05-01  
 **Scope:** Issues confirmed against the live codebase; workarounds in place unless marked otherwise.
 
 Each entry is tagged:
