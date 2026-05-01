@@ -462,7 +462,7 @@ run(adam = list(ADAE = adae_teae, ADSL = adsl))
 
 ---
 
-## 0. Current State (as of 2026-05-01 — arsresult docs refresh: §21 flat-ops, OI-06/OI-07/OI-08, expand-path / fast-path)
+## 0. Current State (as of 2026-05-01 — arsresult + arstlf docs refresh: §21 flat-ops, OI-06/OI-07/OI-08, expand-path, ars_save_rtf, NBSP indenting)
 
 ### Suite overview
 
@@ -1630,12 +1630,20 @@ See `arsshells/REFERENCE.md` for the full 55-shell inventory.
 
 ### arstlf
 
+**Resolved since the original backlog (≤ 2026-05-01):**
+
+- ~~RTF non-breaking-space corruption~~ — `ars_save_rtf()` now rewrites U+00A0 → RTF `\~` before writing, so indented row labels render correctly under `\ansicpg1252` instead of leaking the literal "Â" character. Use `ars_save_rtf()` instead of `gt::gtsave()` for RTF output. The broader RTF / PDF export quality audit (item below) remains open.
+- ~~Indent padding collapsed in HTML output~~ — `prep_ard_for_tfrmt()` now uses U+00A0 (non-breaking space) for indent padding and `gtdefault` for row groups, preserving indentation across HTML, RTF, and PDF.
+
+**Still open:**
+
 | Item | Priority | Notes |
 |------|----------|-------|
 | `gt` backend (direct assembly without tfrmt) | High | Simpler path for sponsors not using tfrmt |
 | `rtables` backend | Medium | Roche framework; common in oncology sponsors |
 | `ggplot2` backend for F-* figure templates | Medium | Required before any figure template can render |
-| RTF / PDF export quality testing | Medium | tfrmt backend produces HTML reliably; RTF/PDF needs audit |
+| RTF / PDF export quality testing | Medium | `ars_save_rtf()` resolves the most acute RTF artefact; the broader audit (line breaks, page breaks, footnote rendering) is still pending. |
+| p-value column rendering for comparison rows (`group_id = NA`) | Medium | Required before T-EF-01 renders correctly. Tracked under "Recommended priorities" in NEXT SESSION block. |
 
 ### ars
 
