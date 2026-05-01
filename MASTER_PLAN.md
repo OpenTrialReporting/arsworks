@@ -1905,3 +1905,133 @@ Full 47-PARAMCD ADLB completes T-LB-01 in **< 30 seconds** (currently 2–3.5 mi
 3. ✅ §22.1 — NA/NaN rendering confirmed clean; stdlib guards in place — 2026-02-28
 4. ✅ §22.2 — PIN-path cache implemented; full ADLB ~6.5 s — 2026-02-28
 5. ✅ All packages green: arscore 1335, arsshells 552, arsresult 272, arstlf 112, ars 95 (0 failures)
+
+---
+
+## 24. ARD Self-Sufficiency via ID-Keyed Joins
+
+**Added:** 2026-05-01
+**Status:** Design — implementation not yet started.
+**Owners:** arscore (helper), arstlf (consumer), arsstudio (export bundle).
+
+### §24.1 — Problem statement
+
+A user inspecting an ARD CSV exported from arsstudio currently sees only foreign keys — `analysis_id`, `operation_id`, `grouping_id`, `group_id`, plus `raw_value` / `formatted_value`. To recreate the rendered table they need both the reporting-event JSON (for analysis names, group labels, method descriptions, result patterns) and the Shell JSON (for row labels, column labels, indent levels, format codes, and section structure).
+
+The reporting-event-side metadata is already addressable via `arscore::enrich_ard()`. The Shell-side display metadata is **not joined anywhere** — `arstlf::render()` reads it directly from the in-memory `Shell` object and never writes it back to the ARD. The exported CSV is therefore not self-sufficient: a downstream consumer cannot reconstruct the rendered table without re-running the full pipeline against the original Shell.
+
+### §24.2 — Goal and non-goals
+
+**Goal:** an ARD that, joined with the reporting-event JSON and the Shell JSON, deterministically reconstructs the rendered table — without having to re-run `hydrate()` / `run()`.
+
+**Non-goal:** baking display columns directly into the ARD as a permanent shape change. The ARS spec separates ARD (facts) from display metadata (layout) on purpose. We add display columns only as an **opt-in enrichment** produced by an explicit join helper, never as the default `run()` output.
+
+### §24.3 — Current state
+
+| Component | What it joins | Source |
+|-----------|---------------|--------|
+| `arscore::enrich_ard(ard, re)` | `analysis_label`, `method_id`, `dataset`, `variable`, `analysis_set_id`, `data_subset_id`, `group_label[_N]`, `result_pattern` | `ars_analysis`, `ars_method`, `ars_grouping_factor` |
+| `arstlf::prep_ard_for_tfrmt(ard, shell, …)` | `row_label`, `col_label`, `indent`, `param`, `section_match_key` | `ShellSection`, `ShellCell` |
+| `arsstudio::output$dl_ard` | nothing — bare `write.csv(ard, …)` | n/a |
+
+`prep_ard_for_tfrmt()` is the closest existing prior art — it already walks the Shell geometry and joins by `(analysis_id, operation_id)` — but it is internal-only, returns a tfrmt-shaped frame (not an ARD), and inlines several display-time transformations (zero-fill, OP_N_PCT suppression, NBSP indent padding) that should not leak into a portable enriched ARD.
+
+### §24.4 — Proposed design
+
+Add a new exported helper to **arscore** (or — see §24.10 — to arstlf if we conclude geometry concerns belong there):
+
+```r
+enrich_ard_with_geometry(ard, reporting_event, shell)
+```
+
+It calls `enrich_ard(ard, reporting_event)` first (so all reporting-event-side columns are populated), then performs an additional left-join against the Shell's flattened geometry. The geometry frame has one row per `ShellCell`:
+
+| Column | Source | Notes |
+|--------|--------|-------|
+| `analysis_id` | `cell@analysis_id` | join key |
+| `operation_id` | `cell@operation_id` | join key |
+| `row_label` | `cell@row_label` | placeholder tokens (`__GROUP_TRT_LABEL__`, etc.) resolved if shell is hydrated |
+| `col_label` | `cell@col_label` | empty string ↔ "resolve from group" — see §24.5 |
+| `indent` | `cell@indent` | row-stub indent depth |
+| `format` | `cell@format` | display format code (e.g. `"xx (xx.x%)"`) |
+| `placeholder` | `cell@placeholder` | mock-render literal; included so consumers can re-`render_mock()` |
+| `section_label` | `section@label` | the parent `ShellSection`'s label |
+| `section_match_key` | (computed) | falls back to first non-empty indent-0 row label when section label is empty (T-AE-02 pattern). Mirrors the existing `arstlf::.extract_shell_geometry()` rule. |
+
+The geometry frame is built by walking `shell@sections[[i]]@cells[[j]]` once at enrichment time. The cost is `O(n_cells)`, independent of ARD size.
+
+### §24.5 — `col_label` fallback rules
+
+A `ShellCell@col_label` carries one of three things:
+
+1. **A literal label** (`"Treatment A"`) — joined as-is.
+2. **An empty string** — the CSD compact pattern, where `resultsByGroup = TRUE` defers column resolution to runtime. The enriched column header should be `ars_group@label` for the row's `group_id` (and recursively for additional grouping factors when present).
+3. **A placeholder token** (`"__GROUP_TRT_LABEL__"`) — pre-Phase-B convention; resolved like (2) by looking up the group label from the reporting event.
+
+The helper stores both columns:
+- `col_label_raw` — verbatim from `ShellCell@col_label`.
+- `col_label` — resolved string after applying (2) and (3); equals `col_label_raw` when (1).
+
+Consumers that need to reproduce the *intent* (mock rendering, layout review) read `col_label_raw`; consumers that need the *displayed* string read `col_label`.
+
+### §24.6 — `arstlf::render()` consumes the enriched ARD
+
+`render()` already accepts an `ArsResult` bundle (ARD + Shell). The new path: when the ARD already carries the geometry columns (`row_label`, `col_label`, `indent`, `format`, `section_label`), `render()` can short-circuit `prep_ard_for_tfrmt()`'s shell-walk and read the columns directly. The Shell becomes optional in this mode — useful for reproducing a table from an exported CSV bundle without re-loading the template.
+
+Detection rule: if `all(c("row_label", "col_label", "indent", "format") %in% names(ard))`, treat the ARD as pre-enriched. Otherwise fall back to the current Shell-walk path.
+
+### §24.7 — `arsstudio` export bundle
+
+Replace the current three independent download handlers (`dl_ard` CSV, `dl_json` reporting-event JSON, `dl_full_ars` reporting-event-with-results JSON) with a single **bundle download** that produces a zip containing:
+
+1. `<shell_id>_ard.csv` — bare ARD as today.
+2. `<shell_id>_ard_enriched.csv` — `enrich_ard_with_geometry()` output.
+3. `<shell_id>_reporting_event.json` — hydrated reporting event.
+4. `<shell_id>_shell.json` — Shell geometry (sections + cells), serialised via a new `arsshells::shell_to_json()` round-trip helper if it doesn't yet exist.
+5. `<shell_id>_README.md` — short reproducibility note explaining how to feed the four files back into `arstlf::render()` to reconstruct the table.
+
+Existing downloads remain available individually (back-compat) but a "Download bundle (.zip)" button becomes the recommended entry point.
+
+### §24.8 — Backwards compatibility
+
+- **`arscore::enrich_ard()` unchanged** — `enrich_ard_with_geometry()` is a new export; the existing helper remains the lighter no-Shell-needed option for users who only have a reporting event.
+- **`arstlf::render(ard, shell)` unchanged** — current callers still pass a Shell. The new short-circuit only activates when the ARD has the geometry columns; bare ARDs continue to walk the Shell.
+- **Default `run()` output unchanged** — no extra columns leak into the canonical ARD shape, so no downstream consumers (validators, gt rendering, schema-strict checks) see a shape change.
+- **arsstudio existing downloads** — left in place for users who scripted against the individual file URLs.
+
+### §24.9 — Implementation order
+
+1. **arsshells** — add `shell_to_json()` / `json_to_shell()` (or confirm the existing template JSON in `inst/templates/` is itself round-trippable; if so, expose a thin save helper).
+2. **arscore** — implement `enrich_ard_with_geometry(ard, reporting_event, shell)`. Unit tests against a small fixture covering: (a) literal `col_label`, (b) CSD empty `col_label`, (c) placeholder token. Verify the helper is a strict superset of `enrich_ard()` columns.
+3. **arstlf** — wire `render()` to detect the geometry columns and short-circuit. Tests: (a) round-trip — `render(enrich_ard_with_geometry(ard, re, shell))` matches `render(ard, shell)` byte-for-byte. (b) bare-ARD path still works.
+4. **arsstudio** — add `dl_bundle` zip download. Reuse existing `.embed_ard_into_re()` for the reporting-event-with-results variant. Add a smoke test that the zip contains the expected five entries.
+5. **Documentation** — `arscore` and `arstlf` README + NEWS entries; arsstudio README "Validation modes" section gets a sibling "Export modes" section.
+
+### §24.10 — Open questions
+
+- **Helper home — arscore vs arstlf?** `enrich_ard()` lives in arscore today, so consistency argues for arscore. But the helper depends on `arsshells::Shell` (the geometry source), and arscore has no other arsshells dependency. Two options:
+  1. arscore exposes a generic `enrich_ard_with_geometry(ard, re, geometry_frame)` taking a pre-flattened geometry frame; the Shell-walking lives in arsshells (`shell_geometry_frame()`). This keeps arscore's dependency surface untouched.
+  2. arstlf hosts the helper as `arstlf::enrich_ard_with_geometry()` since arstlf already has the Shell-walk logic. Slight asymmetry with `enrich_ard()` but cleaner dependencies.
+  
+  **Recommendation:** option 1 — split the responsibility on the dependency boundary. arsshells builds the geometry frame; arscore performs the join.
+
+- **Does `enrich_ard_with_geometry()` get the same `result_pattern → formatted_value` fill behaviour as `enrich_ard()`?** Yes — call `enrich_ard()` internally first, then layer the geometry join on top. No code duplication.
+
+- **Bundle format — zip or directory?** Zip for portability. Use `utils::zip()` (no extra dependency).
+
+### §24.11 — Test plan
+
+| Layer | Test |
+|-------|------|
+| arsshells | `shell_geometry_frame(shell)` returns one row per ShellCell, with `section_label` populated (incl. T-AE-02 empty-section fallback). |
+| arscore | `enrich_ard_with_geometry()` is a strict superset of `enrich_ard()` columns. |
+| arscore | `col_label` fallback resolves group label for empty / placeholder cell labels. |
+| arstlf | `render(enriched_ard)` (no shell) matches `render(ard, shell)` byte-for-byte for all 6 Priority-1 templates. |
+| arsstudio | Bundle download produces a zip with the expected entries; round-trip back through `render()` reproduces the displayed table. |
+
+### §24.12 — Out of scope
+
+- Changing the canonical ARD shape returned by `arsresult::run()`.
+- Deprecating the bare-ARD render path in `arstlf`.
+- Schema-strict validation of the enriched ARD shape (the additional columns are tolerated by the CDISC schema's `additionalProperties: true`, but a formal extension proposal is a separate piece of work).
+- Figure (F-*) and listing (L-*) shell support — TBD whether the helper covers these once those template families ship.
