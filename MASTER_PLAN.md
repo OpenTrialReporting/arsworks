@@ -2035,3 +2035,90 @@ Existing downloads remain available individually (back-compat) but a "Download b
 - Deprecating the bare-ARD render path in `arstlf`.
 - Schema-strict validation of the enriched ARD shape (the additional columns are tolerated by the CDISC schema's `additionalProperties: true`, but a formal extension proposal is a separate piece of work).
 - Figure (F-*) and listing (L-*) shell support — TBD whether the helper covers these once those template families ship.
+
+### §24.13 — Deferred refinement: model-faithful row ordering
+
+**Status:** Deferred. The shipped sort in `enrich_ard_with_geometry()` is good enough for all 6 Priority-1 templates but is structurally weaker than what the model affords.
+
+**The seven-layer canonical sort key.** ARS v1.0 carries explicit `@order` slots at six layers, plus the arsshells-side `ShellSection@order`. Together they form the model-faithful sort key for any rendered table row:
+
+```
+(ordered_display.order,                  ← which display in the output (TOC sequence)
+ ordered_display_sub_section.order,      ← title vs body vs footnote within a display
+ section_order,                          ← arsshells / ShellSection
+ cell sequence within section,           ← arsshells / ShellCell index in @cells
+ ordered_grouping_factor.order,          ← which factor varies fastest
+ group.order,                            ← within that factor
+ operation.order)                        ← n, mean, SD within a method
+```
+
+**What ships today.** The current `enrich_ard_with_geometry()` sort uses three of those keys: `section_order`, geometry-row position within section (≈ cell sequence), and the original ARD row position as a tertiary tiebreaker.
+
+**Why the lazy chain works for now.**
+
+| Layer | How the current implementation handles it |
+|-------|-------------------------------------------|
+| `ordered_display.order` | The 6 Priority-1 templates each ship a single `ordered_display`, so this layer collapses. |
+| `ordered_display_sub_section.order` | Body sub-section is the only one that produces ARD rows; titles / footnotes do not appear in the ARD. |
+| `section_order` | Direct hit. |
+| Cell sequence within section | Direct hit via the `.geom_seq` column added at join time, derived from `seq_len(nrow(geometry))` — this is faithful to `ShellSection@cells` order. |
+| `ordered_grouping_factor.order` | Indirect — `arsresult::run()` iterates factors in `@order`, so this becomes the ARD row order, which is my tertiary tiebreaker. |
+| `group.order` | Same — `run()` iterates groups in `ars_group@order` within each factor, encoded in ARD row order. |
+| `operation.order` | Indirect — templates declare cells in operation order, so cell sequence ≈ operation sequence. |
+
+**Failure modes the lazy chain does not cover.**
+
+1. **Transposed layout.** A future template could declare cells in non-operation order (e.g. a vertical operation column with the row dimension on cells). Cell sequence would diverge from operation order, and the sort would prefer the cell sequence — which is the right answer for the layout but the wrong answer if a downstream consumer wants operation order.
+
+2. **Sponsor reorders groups.** If a sponsor sets `ars_group@order` non-monotonically without updating the iteration order in `arsresult::run()`, the sort would land on the run-emitted order rather than the declared `@order`.
+
+3. **Multiple displays in one output.** A reporting event with two `ordered_display` entries would emit interleaved ARD rows; without `ordered_display.order` on the sort key, the displays could land in arbitrary order in the enriched frame.
+
+4. **Sub-sections with body content beyond the default body sub-section.** If `ars_ordered_display_sub_section` evolves to carry result-bearing rows beyond just the body (e.g. a footer-stat row), the current implementation would not order them correctly relative to the body.
+
+**The model-faithful approach.** Synthesise a global integer `display_order` per `(analysis_id, operation_id, group_id*)` tuple by walking the reporting event's `ordered_display`s top-down:
+
+```r
+.compute_display_order <- function(reporting_event, geometry) {
+  rank <- 0L
+  out  <- list()
+  for (od in reporting_event@outputs[[…]]@displays) {            # ordered_display.order
+    for (sub in od@display@sub_sections) {                       # ordered_display_sub_section.order
+      for (sec in geometry_sections_in_sub(sub)) {               # section_order
+        for (cell in sec@cells_in_declared_order) {              # cell sequence
+          for (ogf in cell@analysis@ordered_groupings) {         # ordered_grouping_factor.order
+            for (g in ogf@grouping_factor@groups_in_at_order) {  # group.order
+              for (op in cell@method@operations_in_at_order) {   # operation.order
+                rank <- rank + 1L
+                out[[length(out) + 1L]] <- list(
+                  analysis_id   = cell@analysis_id,
+                  operation_id  = op@id,
+                  group_id      = g@id,
+                  display_order = rank
+                )
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  do.call(rbind, out)
+}
+```
+
+Then the join helper would left-join `display_order` onto the ARD by `(analysis_id, operation_id, group_id*)` and sort by it as a single integer key. Unmatched rows still trail the matched ones via `na.last = TRUE`.
+
+**Why deferred.**
+
+- The 6 Priority-1 templates all pass with the lazy chain, and there is no observed failure on a real shell yet.
+- Walking `ordered_display` correctly is non-trivial — it intersects with the §24 design rule that arscore should not depend on arsshells (sub-section → section linkage requires both the reporting event and the Shell). May want to refactor the helper into two stages (synthesise key in arsshells, sort in arscore) before doing this.
+- Multi-grouping joins (`group_id_1`, `group_id_2`, …) need a clear story for which dimension is "the" group axis on the sort key.
+
+**Triggers that would promote this from deferred to active:**
+
+- A template lands in arsshells with a transposed cell layout.
+- A sponsor reports a row-order regression that bisects to the lazy chain.
+- F-* (figure) or L-* (listing) templates ship — those have different sub-section structure and may exercise unused layers of the canonical key.
+
+**Tracking:** Re-evaluate when working on `arsstudio` step 4 of §24.9 (bundle export). If the bundle's reproducibility README needs to assert "rows are in canonical model order", we promote this from deferred to active.
