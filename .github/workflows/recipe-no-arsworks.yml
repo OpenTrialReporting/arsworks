@@ -15,6 +15,16 @@ name: §25 recipe — no-arsworks reproduction
 # arstlf can't see — using the suite to test the no-suite script is a
 # confidence trap. Running the ACTUAL bundled script in a session that
 # doesn't have arsworks installed is the definitive guarantee.
+#
+# SUBMODULE AUTH NOTE: the default GITHUB_TOKEN scoped to this repo
+# cannot clone sibling submodule repos in the OpenTrialReporting org
+# (404s on `git submodule update --init`). We work around this by
+# checking out each sub-package explicitly with actions/checkout@v6's
+# `repository:` form — that path uses the standard auth flow and works
+# for both public repos and private repos to which a configured PAT
+# (set as the `SUBMODULES_PAT` secret) has access. If the secret is
+# absent, the default GITHUB_TOKEN is used; that suffices for public
+# repos but will 404 on private repos with a clear error message.
 
 on:
   push:
@@ -30,10 +40,50 @@ jobs:
     name: Build T-DM-01 bundle (with arsworks)
     runs-on: ubuntu-latest
     steps:
-      - name: Check out superproject
+      - name: Check out superproject (no submodules)
+        uses: actions/checkout@v6
+
+      - name: Check out arscore
         uses: actions/checkout@v6
         with:
-          submodules: recursive
+          repository: OpenTrialReporting/arscore
+          path: arscore
+          token: ${{ secrets.SUBMODULES_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Check out arsshells
+        uses: actions/checkout@v6
+        with:
+          repository: OpenTrialReporting/arsshells
+          path: arsshells
+          token: ${{ secrets.SUBMODULES_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Check out arsresult
+        uses: actions/checkout@v6
+        with:
+          repository: OpenTrialReporting/arsresult
+          path: arsresult
+          token: ${{ secrets.SUBMODULES_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Check out arstlf
+        uses: actions/checkout@v6
+        with:
+          repository: OpenTrialReporting/arstlf
+          path: arstlf
+          token: ${{ secrets.SUBMODULES_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Check out arsstudio
+        uses: actions/checkout@v6
+        with:
+          repository: OpenTrialReporting/arsstudio
+          path: arsstudio
+          token: ${{ secrets.SUBMODULES_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Check out ars
+        uses: actions/checkout@v6
+        with:
+          repository: OpenTrialReporting/ars
+          path: ars
+          token: ${{ secrets.SUBMODULES_PAT || secrets.GITHUB_TOKEN }}
 
       - name: Set up R
         uses: r-lib/actions/setup-r@v2
