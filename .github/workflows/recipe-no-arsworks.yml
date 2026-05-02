@@ -95,23 +95,33 @@ jobs:
       # checkouts have no NAMESPACE files. R CMD INSTALL against a
       # package with no NAMESPACE produces a no-exports installation —
       # which then breaks downstream imports (e.g. ars @importFrom
-      # arsshells browse_shells). Pre-document each sub-package so
-      # roxygen2 generates a fresh NAMESPACE before pak installs it.
+      # arsshells browse_shells). Generate a fresh NAMESPACE in each
+      # sub-package before pak installs it.
+      #
+      # Using roxygen2 directly (not devtools) keeps the dependency
+      # chain tight — roxygen2 needs only cli/rlang/desc/glue/etc.,
+      # whereas devtools transitively pulls in pkgdown→ragg→system
+      # font libs that aren't installed on the runner yet.
+      #
+      # RENV_CONFIG_AUTOLOADER_ENABLED=FALSE bypasses the superproject
+      # renv autoloader so install.packages() lands in the system
+      # libpath, not the renv/library/ tree (which doesn't exist on a
+      # fresh runner).
       - name: Pre-document sub-packages (regenerate gitignored NAMESPACE)
+        env:
+          RENV_CONFIG_AUTOLOADER_ENABLED: FALSE
         run: |
           Rscript -e '
             install.packages(
-              c("roxygen2", "devtools", "S7"),
+              c("roxygen2", "S7"),
               repos = "https://packagemanager.rstudio.com/all/__linux__/jammy/latest"
             )
             for (p in c("arscore", "arsshells", "arsresult",
                         "arstlf", "arsstudio", "ars")) {
               message("Documenting ", p)
-              devtools::document(
-                p,
-                roclets = c("collate", "namespace", "rd"),
-                quiet   = TRUE
-              )
+              roxygen2::roxygenise(p,
+                                   roclets = c("collate", "namespace", "rd"),
+                                   load_code = "source")
             }
           '
 
