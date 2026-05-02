@@ -2122,3 +2122,181 @@ Then the join helper would left-join `display_order` onto the ARD by `(analysis_
 - F-* (figure) or L-* (listing) templates ship — those have different sub-section structure and may exercise unused layers of the canonical key.
 
 **Tracking:** Re-evaluate when working on `arsstudio` step 4 of §24.9 (bundle export). If the bundle's reproducibility README needs to assert "rows are in canonical model order", we promote this from deferred to active.
+
+---
+
+## §25 — Package-independent reproduction scripts
+
+**Status:** Approved design (2026-05-02). Implementation pending.
+
+### §25.1 — Problem statement
+
+External stakeholders (regulators, auditors, sponsor statisticians, vendor partners) frequently can't or won't install the arsworks package suite to verify a submitted table:
+
+- A regulator may require seeing the literal computation logic, not `library(arscore); run(re, adam)` as an opaque call.
+- A statistician at a CRO may want to rerun the ARD on their own data slice using only CRAN packages.
+- An auditor may need a stand-alone artifact for the trial master file that survives ten years of language changes.
+
+Today the §24.7 reproducibility bundle ships the bare ARD, the enriched ARD, the reporting event JSON, the hydrated Shell JSON, and a README — but the README's reproduction snippet is `library(arstlf); render(...)`. That still requires the suite. We need an artifact that lets a reviewer regenerate each ARD and render the table **without installing arsworks**.
+
+### §25.2 — Goals, non-goals, and the canonical-ARD rule
+
+**Goals.**
+
+1. A reviewer with R + a small set of CRAN packages can reconstruct each ARD from raw ADaM data and re-render the table.
+2. The generated artifact is self-contained, human-readable, and inspectable line by line.
+3. The artifact is deterministic — identical input produces byte-identical output.
+4. Lives alongside the §24.7 bundle so a reviewer can compare "what the suite produced" against "what the script produces".
+
+**Non-goals.**
+
+- Replacing the suite as the primary authoring path. The suite stays as the authoring tool; the script is an export artifact.
+- Reproducing arsstudio's interactive Shiny features.
+- Generating Python / SAS / Julia equivalents (R only for v1).
+- Validating ADaM data shape — the script assumes its inputs match what was provided to the suite.
+- Round-tripping the script back into a Shell or reporting event.
+
+**Canonical-ARD rule (load-bearing).** The ARD has **one** shape across the system. Whether produced by `arsresult::run()` or by the standalone recipe, the ARD that feeds rendering is byte-identical. The ARS-shape ARD (`analysis_id`, `operation_id`, `raw_value`, group columns, etc.) is canonical; cards is an internal helper inside the recipe, not an output target. Everything downstream of "ARD" — the bundle CSVs, the §24.6 short-circuit, the rendering recipe — consumes the canonical shape regardless of source.
+
+### §25.3 — Dependency floor
+
+| Layer | Required CRAN packages | Why |
+|-------|------------------------|-----|
+| ARD computation | `dplyr`, `cards`, `tibble` | `cards` (pharmaverse) owns the operation→summarise mapping. The `OP_COUNT`/`OP_MEAN`/`OP_SD`/`OP_MEDIAN`/`OP_MIN`/`OP_MAX` set collapse into one `ard_continuous(...)` per analysis. `OP_N`/`OP_N_PCT` come from `ard_categorical(...)`. |
+| Translator | base R only | Single ~30-line function defined at the top of every script. Maps cards-shape `(group1_level, variable, stat_name, stat)` → ARS-shape `(analysis_id, operation_id, group_value, raw_value)`. |
+| Table rendering | `tfrmt`, `gt` | Already the rendering backend; both on CRAN; both stable. |
+| ADaM input | `haven` (Suggests) | For `.sas7bdat` reading. `.rds` and `.csv` use base R. |
+
+**Explicitly excluded:** the arsworks suite (`arscore`, `arsshells`, `arsresult`, `arstlf`, `arsstudio`, `ars`).
+
+The script's `library()` block: `dplyr`, `cards`, `tfrmt`, `gt` — and nothing arsworks.
+
+### §25.4 — Four-stage design
+
+The recipe script for one shell has four blocks. Stages 1–3 produce the canonical ARS-shape ARD; Stage 4 renders.
+
+**Stage 1 — ADaM load.** The script accepts paths via env vars and defaults to the bundled sidecar `.rds` files (see §25.6 on bundle integration):
+
+```r
+adam_paths <- list(
+  ADSL = Sys.getenv("ADSL_PATH", unset = "T-DM-01_adsl_sample.rds")
+)
+adam <- lapply(adam_paths, function(p) {
+  if (!file.exists(p)) stop("Set ADSL_PATH (etc.) or extract bundled sample.")
+  if (grepl("\\.sas7bdat$", p)) haven::read_sas(p)
+  else if (grepl("\\.csv$", p)) read.csv(p, stringsAsFactors = FALSE)
+  else readRDS(p)
+})
+```
+
+**Stage 2 — Cards-based ARD computation.** For each analysis, emit the appropriate cards call(s). Continuous summaries take one-or-two calls (`by` for per-arm, plus an unbypassed call for the across-arm total when the suite emits one). Categorical summaries take one `ard_categorical()` per analysis.
+
+**Stage 3 — Translate to canonical ARS-shape.** A single ~30-line `to_ars_shape(ard_cards, analysis_id, group_label = NULL)` function (defined once at the top of every script) maps cards' columns to the ARS-shape schema. After Stage 3 the local variable `ard` is byte-identical to `arsresult::run(re, adam)`.
+
+**Stage 4 — Render with tfrmt.** Decomposed `tfrmt(...)` deparse — format definitions at the top, body / row-group / column plans below, then the assembling `tfrmt(...)` call:
+
+```r
+fmt_count   <- frmt("xx")
+fmt_n_pct   <- frmt_combine("{n} ({pct})", n=frmt("xx"), pct=frmt("xx.x%"), missing="")
+fmt_mean_sd <- frmt_combine("{mean} ({sd})", mean=frmt("xx.x"), sd=frmt("xx.xx"))
+...
+body <- body_plan(
+  frmt_structure(".default", ".default", OP_COUNT = fmt_count),
+  frmt_structure(".default", ".default", frmt_combine = fmt_n_pct,   params = c("OP_N","OP_N_PCT")),
+  frmt_structure(".default", ".default", frmt_combine = fmt_mean_sd, params = c("OP_MEAN","OP_SD")),
+  ...
+)
+spec <- tfrmt(group="group", label="label", column="column", param="param", value="value",
+              body_plan = body, col_plan = col_plan(...), title = "...", footnote_plan = ...)
+print_to_gt(spec, prep_for_tfrmt_inline(ard, ...))
+```
+
+Format decisions sit at the top so the reviewer's eye lands on them first; mechanical pivot keys are uniform across shells and stay terse.
+
+**Stage 5 — Self-test.** The companion `<id>_recreate_test.R` runs `<id>_recreate.R`, then `stopifnot(identical(ard, readRDS("<id>_ard_enriched.rds")))`. With the canonical-ARD rule, parity is plain `identical()` — no shape-aware comparator needed.
+
+### §25.5 — Implementation: `recipe = TRUE` mode in `build_tfrmt`
+
+Stage 4's deparse is implemented as `arstlf::build_tfrmt(shell, recipe = TRUE)` returning a character vector instead of a tfrmt object. **One source of truth** — when `build_tfrmt()` changes, the codegen tracks automatically (no parallel deparser). Pattern is similar to dbplyr's `show_query()`.
+
+Same approach for arscore: `arscore::generate_ard_recipe(reporting_event)` lives next to `enrich_ard()` and reuses the operation registry directly.
+
+### §25.6 — Bundle integration (extends §24.7)
+
+The §24.7 bundle gains three new files (and one renamed):
+
+- `<id>_recreate.R` — the four-stage reproduction script.
+- `<id>_recreate_test.R` — runs the recipe and asserts `identical(ard_recipe, ard_suite)`.
+- `<id>_adsl_sample.rds` (and `<id>_adae_sample.rds`, etc., as needed) — sidecar ADaM the suite analysed.
+
+**Default behaviour:** `arsstudio:::.write_bundle_zip(..., include_adam = "always")` ships the ADaM that was analysed alongside the script. Submission packages send data with code, so this matches the primary use case. `include_adam = "never"` opt-out is available for ad-hoc audits where the reviewer brings their own ADaM via `ADSL_PATH=` env var.
+
+The bundle README's reproduction snippet then has three options, in increasing audit rigour:
+1. `library(arstlf); render(...)` — re-uses the suite (today's path).
+2. `Rscript T-DM-01_recreate.R` — re-runs with CRAN packages only.
+3. `Rscript T-DM-01_recreate_test.R` — verifies the script reproduces the bundled ARD byte-for-byte.
+
+### §25.7 — Where the codegen lives
+
+`arscore` for v1 (Stage 1 / Stage 2 / Stage 3 codegen lives next to the operation registry and where-clause compiler); `arstlf::build_tfrmt(..., recipe = TRUE)` for Stage 4 (lives next to the live build path). If the combined surface grows beyond ~500 lines or develops its own deparse DSL, promote both into a sibling `arsexport` package.
+
+### §25.8 — Operator coverage matrix
+
+Cards owns the operation→summarise mapping; the codegen only emits the where-clause and the by-variable per analysis. Coverage for Priority-1 templates:
+
+| ARS Where-clause Operator | dplyr emission |
+|-----|------|
+| EQ / NE | `var == "Y"` / `var != "Y"` |
+| GT / GE / LT / LE | `var > x`, `var >= x`, etc. |
+| IN / NOT_IN | `var %in% c(...)` / `!var %in% c(...)` |
+| IS_NULL / NOT_NULL | `is.na(var)` / `!is.na(var)` |
+| AND / OR / NOT | `(...) & (...)`, `(...) \| (...)`, `!(...)` |
+
+| ARS Operation | cards emission |
+|----|----|
+| OP_COUNT | `ard_continuous(... statistic = ~ list("OP_COUNT" = \(x) length(x)))` |
+| OP_MEAN | `ard_continuous(... statistic = ~ list("OP_MEAN" = \(x) mean(x, na.rm = TRUE)))` |
+| OP_SD | `ard_continuous(... statistic = ~ list("OP_SD" = \(x) sd(x, na.rm = TRUE)))` |
+| OP_MEDIAN | `ard_continuous(... statistic = ~ list("OP_MEDIAN" = \(x) median(x, na.rm = TRUE)))` |
+| OP_MIN / OP_MAX | `ard_continuous(... statistic = ~ list("OP_MIN" = \(x) min(x, na.rm = TRUE), ...))` |
+| OP_N / OP_N_PCT | `ard_categorical(variables = SEX, by = TRT01A, denominator = "column")` (cards' `n` and `p` map to OP_N and OP_N_PCT after translation; `p × 100`). |
+
+Operators / operations not in this list throw a codegen error pointing at the offending analysis. v1 doesn't need to be exhaustive — Priority-1 templates only exercise the rows above.
+
+### §25.9 — Prototype-expanded shells (T-AE-02 / T-LB-*) — in scope
+
+§24.13 and §25 are decoupled. §24.13's pain is the *live* §24.6 short-circuit failing on `arstlf::render(enriched_ard, prototype_shell)` because of an upstream many-to-many join. §25 codegen never touches the enriched ARD as a render input — it goes ADaM → cards recipe → ARS-shape ARD → tfrmt. None of those steps hit the §24.13 issue.
+
+The codegen runs against the *post-hydrate* Shell, which already has concrete cells per observed PT (or PARAMCD) after `section_map` / Mode 3 expansion. The deparsed `body_plan` has more `frmt_structure` entries (one per observed PT) but the deparse logic is identical. Two-level grouping (SOC × PT) requires the translator to join on `(group_value, group_value_1)` instead of `(group_value)` — same pattern, one extra column.
+
+T-AE-02's recipe script is longer (200–400 lines vs T-DM-01's ~100) because every observed PT is enumerated explicitly in the body plan. That's a feature for a regulator — every cell visibly traceable.
+
+### §25.10 — Self-test in CI: both layers
+
+Two layers of validation, different cadences:
+
+- **Fast smoke test (every PR, runs in arstlf's testthat suite):** generate the recipe script, source it in the current session, assert `identical(ard_recipe, ard_suite)`. Catches regressions on every commit. Fast (~3s per shell).
+- **Slow no-arsworks workflow (release tags / nightly):** spin up a fresh R session with **only** CRAN deps installed, extract a fresh bundle, run `Rscript <id>_recreate_test.R`. Catches the namespace-leak failure mode ("recipe accidentally references an arsworks function") that the fast test can't see.
+
+Without the slow workflow, the fast test is a confidence trap — using the suite to validate the no-suite script. With both, we get cheap routine checks plus a definitive guarantee at release boundaries.
+
+### §25.11 — Implementation order
+
+1. **arscore — where-clause deparser.** Reverse of `compile_where_clause()`: takes an `ars_where_clause` and returns a deparsed R expression as a string.
+2. **arscore — `to_ars_shape()` translator template + cards-emission registry.** A character-template the codegen emits literally at the top of every recipe; the registry drives Stage-2 cards-call generation.
+3. **arscore — `generate_ard_recipe(reporting_event)`.** Returns a character vector of R lines (or writes to file). Stages 1–3 of §25.4.
+4. **arstlf — `build_tfrmt(shell, recipe = TRUE)`.** Returns the deparsed `tfrmt(...)` block as a character vector. Stage 4.
+5. **arsstudio — bundle integration.** `helpers-bundle.R::.write_bundle_zip` adds the recipe + test files (and the ADaM sidecar via `include_adam = "always"`).
+6. **Fast smoke test in arstlf testthat.** T-DM-01 fixture: generate, source, assert `identical()`.
+7. **Slow no-arsworks GitHub Actions workflow.** Fresh R install + CRAN-only deps + bundle extract + `Rscript ..._recreate_test.R`.
+8. **Documentation.** README sections in arscore + arstlf + arsstudio plus an extended bundle README.
+
+### §25.12 — Out of scope (v1)
+
+- Codegen for figures (F-*) or listings (L-*) — table-only first.
+- Codegen targeting languages other than R.
+- Round-trip from a generated script back to a Shell/reporting event.
+- Visual diff tooling between bundled vs codegen-rendered tables.
+- ARD codegen for analyses that depend on derived ADaM variables (the script assumes the input ADaM matches what the suite saw).
+- Custom `frmt(...)` functions in `tfrmt` specs — Priority-1 templates use only the standard formatters; non-deparsable specs would need an RDS fallback.
+
