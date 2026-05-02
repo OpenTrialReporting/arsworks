@@ -113,15 +113,19 @@ jobs:
         run: |
           Rscript -e '
             install.packages(
-              c("roxygen2", "S7"),
+              c("roxygen2", "pkgload", "S7"),
               repos = "https://packagemanager.rstudio.com/all/__linux__/jammy/latest"
             )
             for (p in c("arscore", "arsshells", "arsresult",
                         "arstlf", "arsstudio", "ars")) {
               message("Documenting ", p)
+              # Default load_code = "pkgload" — uses the just-installed
+              # pkgload to load the source for tag introspection. Avoids
+              # roxygen2 internal load_code = "source" which tries to
+              # loadNamespace() a fake "roxygen_devtest" package and
+              # fails on a fresh runner.
               roxygen2::roxygenise(p,
-                                   roclets = c("collate", "namespace", "rd"),
-                                   load_code = "source")
+                                   roclets = c("collate", "namespace", "rd"))
             }
           '
 
