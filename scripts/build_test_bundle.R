@@ -29,6 +29,11 @@ suppressMessages({
 args   <- commandArgs(trailingOnly = TRUE)
 out_dir <- if (length(args) >= 1L) args[[1L]] else "bundle"
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
+# .write_bundle_zip() does setwd(<staging>) before calling utils::zip(),
+# which means a relative `out_zip` path is interpreted against the
+# staging directory and the file ends up unreachable. Normalise to an
+# absolute path here so the zip lands in the intended out_dir.
+out_dir <- normalizePath(out_dir, mustWork = TRUE)
 
 message("== Building T-DM-01 bundle into ", normalizePath(out_dir), " ==")
 
