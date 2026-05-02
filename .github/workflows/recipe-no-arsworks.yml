@@ -94,6 +94,13 @@ jobs:
       - name: Install build-time R deps
         uses: r-lib/actions/setup-r-dependencies@v2
         with:
+          # Hard deps only (Imports + LinkingTo + Depends). Skipping
+          # Suggests avoids pulling in chromium-via-chromote — the
+          # pak resolver tries to `add-apt-repository ppa:xtradeb/apps`
+          # for it, and that command hangs reaching launchpad.net on
+          # the GitHub-hosted runners.  We only need to *build* the
+          # bundle here; HTML-to-image rendering is unused.
+          dependencies: '"hard"'
           extra-packages: |
             any::devtools
             any::dplyr
