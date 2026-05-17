@@ -79,39 +79,77 @@ pull_results <- vapply(PACKAGES, function(pkg) {
   return(label)
 }, character(1L))
 
-# ── 1.5 Heal corrupt arstlf install (R 4.5 libdeflate workaround) ─────────────
+# ── 1.5 Heal installed sub-packages when they drift from source ───────────────
 #
-# R 4.5's lazy-load DB compressor (libdeflate) produces a corrupt .rdb when
-# arstlf is installed with byte-compilation enabled. Symptom: any access to an
-# arstlf function fails with "internal error 1 in R_decompress1 with libdeflate"
-# during the load_all step below. arstlf/DESCRIPTION carries ByteCompile: no for
-# this reason, but devtools::install() and some renv paths ignore that field, so
-# we re-check the installed copy here and reinstall via bare R CMD INSTALL if it
-# can't decompress.
-local({
-  inst <- tryCatch(find.package("arstlf"), error = function(e) character(0))
-  if (!length(inst)) return()
-  ok <- tryCatch({
-    loadNamespace("arstlf")
-    ns <- asNamespace("arstlf")
-    all(vapply(ls(ns, all.names = TRUE), function(n) {
-      tryCatch({ force(get(n, envir = ns)); TRUE },
-               error = function(e) FALSE)
-    }, logical(1L)))
-  }, error = function(e) FALSE)
-  if (isTRUE(ok)) return()
-  message("  HEAL  arstlf  (.rdb corrupt — reinstalling with --no-byte-compile)")
-  try(unloadNamespace("arstlf"), silent = TRUE)
+# Two failure modes are covered:
+#
+# 1. arstlf-specific: R 4.5's libdeflate-backed lazy-load DB miscompresses
+#    arstlf's byte-compiled functions, so any access fails with "internal error
+#    1 in R_decompress1 with libdeflate". arstlf/DESCRIPTION carries
+#    ByteCompile: no, but some install paths ignore it — we re-probe by
+#    force-decompressing every namespace entry and reinstall with
+#    --no-byte-compile if any entry fails.
+#
+# 2. Help-DB drift (any package): roxygen reads @inheritParams targets from the
+#    INSTALLED help DB of the dependency, not its source. If a sub-package gains
+#    a new function (and a new man/*.Rd) but its renv-installed copy is older,
+#    the document() step below emits "@param refers to unavailable topic
+#    pkg::fn" warnings. We compare source man/ topics against the installed
+#    help/AnIndex and reinstall the dependency when source has topics the
+#    installed copy is missing.
+.reinstall_pkg <- function(pkg, inst, reason, extra_args = character(0)) {
+  message(sprintf("  HEAL  %-10s  (%s — reinstalling)", pkg, reason))
+  try(unloadNamespace(pkg), silent = TRUE)
   unlink(inst, recursive = TRUE, force = TRUE)
   status <- system2(
     file.path(R.home("bin"), "R.exe"),
-    c("CMD", "INSTALL", "--no-byte-compile",
+    c("CMD", "INSTALL", extra_args,
       paste0("--library=", shQuote(dirname(inst))),
-      shQuote(file.path(ROOT, "arstlf"))),
+      shQuote(file.path(ROOT, pkg))),
     stdout = FALSE, stderr = FALSE
   )
-  if (!identical(status, 0L)) warning("arstlf reinstall failed (status ", status, ")")
-})
+  if (!identical(status, 0L))
+    warning(sprintf("%s reinstall failed (status %s)", pkg, status))
+}
+
+for (pkg in PACKAGES) {
+  src <- file.path(ROOT, pkg)
+  if (!dir.exists(src)) next
+  inst <- tryCatch(find.package(pkg), error = function(e) character(0))
+  if (!length(inst)) next  # not installed yet — load_all below will handle
+
+  # Help-DB drift: does the installed help index cover every source .Rd topic?
+  src_topics <- sub("\\.Rd$", "",
+                    list.files(file.path(src, "man"), pattern = "\\.Rd$"))
+  idx_path <- file.path(inst, "help", "AnIndex")
+  inst_topics <- if (file.exists(idx_path)) {
+    tryCatch(read.table(idx_path, sep = "\t", header = FALSE, quote = "",
+                        fill = TRUE, stringsAsFactors = FALSE)[[1]],
+             error = function(e) character(0))
+  } else character(0)
+  missing <- setdiff(src_topics, inst_topics)
+  if (length(missing)) {
+    .reinstall_pkg(pkg, inst,
+                   sprintf("help DB missing %d topic(s)", length(missing)),
+                   extra_args = if (pkg == "arstlf") "--no-byte-compile" else character(0))
+    next
+  }
+
+  # arstlf-only: confirm the lazy-load DB is readable end-to-end.
+  if (pkg == "arstlf") {
+    ok <- tryCatch({
+      loadNamespace("arstlf")
+      ns <- asNamespace("arstlf")
+      all(vapply(ls(ns, all.names = TRUE), function(n) {
+        tryCatch({ force(get(n, envir = ns)); TRUE },
+                 error = function(e) FALSE)
+      }, logical(1L)))
+    }, error = function(e) FALSE)
+    if (!isTRUE(ok))
+      .reinstall_pkg(pkg, inst, ".rdb corrupt", extra_args = "--no-byte-compile")
+  }
+}
+rm(.reinstall_pkg)
 
 # ── 2. Document + reload all packages in dependency order ─────────────────────
 
