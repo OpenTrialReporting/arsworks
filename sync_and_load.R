@@ -64,6 +64,40 @@ pull_results <- vapply(PACKAGES, function(pkg) {
   return(label)
 }, character(1L))
 
+# ── 1.5 Heal corrupt arstlf install (R 4.5 libdeflate workaround) ─────────────
+#
+# R 4.5's lazy-load DB compressor (libdeflate) produces a corrupt .rdb when
+# arstlf is installed with byte-compilation enabled. Symptom: any access to an
+# arstlf function fails with "internal error 1 in R_decompress1 with libdeflate"
+# during the load_all step below. arstlf/DESCRIPTION carries ByteCompile: no for
+# this reason, but devtools::install() and some renv paths ignore that field, so
+# we re-check the installed copy here and reinstall via bare R CMD INSTALL if it
+# can't decompress.
+local({
+  inst <- tryCatch(find.package("arstlf"), error = function(e) character(0))
+  if (!length(inst)) return()
+  ok <- tryCatch({
+    loadNamespace("arstlf")
+    ns <- asNamespace("arstlf")
+    all(vapply(ls(ns, all.names = TRUE), function(n) {
+      tryCatch({ force(get(n, envir = ns)); TRUE },
+               error = function(e) FALSE)
+    }, logical(1L)))
+  }, error = function(e) FALSE)
+  if (isTRUE(ok)) return()
+  message("  HEAL  arstlf  (.rdb corrupt — reinstalling with --no-byte-compile)")
+  try(unloadNamespace("arstlf"), silent = TRUE)
+  unlink(inst, recursive = TRUE, force = TRUE)
+  status <- system2(
+    file.path(R.home("bin"), "R.exe"),
+    c("CMD", "INSTALL", "--no-byte-compile",
+      paste0("--library=", shQuote(dirname(inst))),
+      shQuote(file.path(ROOT, "arstlf"))),
+    stdout = FALSE, stderr = FALSE
+  )
+  if (!identical(status, 0L)) warning("arstlf reinstall failed (status ", status, ")")
+})
+
 # ── 2. Document + reload all packages in dependency order ─────────────────────
 
 message("\n── Documenting packages ────────────────────────────────────────────────")
