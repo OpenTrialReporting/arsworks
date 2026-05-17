@@ -17,13 +17,17 @@
 #   - git must be on PATH (only needed for the pull step)
 #   - You must be inside the arsworks/ directory (or adjust ROOT below)
 
-# Resolve the project root: prefer the directory containing this script (when
-# sourced from an editor tab), fall back to getwd() (console / untitled tab).
+# Resolve the project root: only trust the editor path when this very script is
+# the focused file (otherwise getSourceEditorContext picks up whatever unrelated
+# file the user has open and we end up pointing at the wrong dir). Otherwise
+# fall back to getwd().
 .src_path <- tryCatch(
   rstudioapi::getSourceEditorContext()$path,
   error = function(e) ""
 )
-ROOT <- if (nchar(.src_path) > 0L && file.exists(.src_path)) {
+ROOT <- if (length(.src_path) && nchar(.src_path) > 0L &&
+            file.exists(.src_path) &&
+            basename(.src_path) == "sync_and_load.R") {
   normalizePath(dirname(.src_path))
 } else {
   normalizePath(getwd())
@@ -31,6 +35,17 @@ ROOT <- if (nchar(.src_path) > 0L && file.exists(.src_path)) {
 rm(.src_path)
 
 PACKAGES <- c("arscore", "arsshells", "arsresult", "arstlf", "ars", "arsstudio")
+
+# Sanity-check ROOT: every sub-package dir should be a direct child. Fail loud
+# rather than silently skipping every package below (the previous behaviour).
+.missing <- PACKAGES[!vapply(file.path(ROOT, PACKAGES), dir.exists, logical(1))]
+if (length(.missing)) {
+  stop("sync_and_load.R: ROOT does not look like arsworks/ — missing sub-package ",
+       "dirs: ", paste(.missing, collapse = ", "), ". Resolved ROOT = ", ROOT, ". ",
+       "setwd() to the arsworks/ directory or open sync_and_load.R in the editor ",
+       "before sourcing.", call. = FALSE)
+}
+rm(.missing)
 
 # ── 1. Pull latest from each sub-package repo ─────────────────────────────────
 
