@@ -97,7 +97,30 @@ pull_results <- vapply(PACKAGES, function(pkg) {
 #    pkg::fn" warnings. We compare source man/ topics against the installed
 #    help/AnIndex and reinstall the dependency when source has topics the
 #    installed copy is missing.
+# Find the renv project library explicitly. We do NOT use find.package() to
+# locate the installed copy: when a package has been dev-loaded via load_all,
+# pkgload shims .libPaths() to make find.package() return the SOURCE directory
+# — and unlink()-ing that would wipe the user's git submodule working tree.
+.renv_lib <- {
+  lp <- .libPaths()
+  hit <- lp[grepl("renv[\\\\/]library", lp)]
+  if (length(hit)) hit[[1L]] else lp[[1L]]
+}
+
 .reinstall_pkg <- function(pkg, inst, reason, extra_args = character(0)) {
+  # SAFETY: never unlink any sub-package source dir. (Discovery uses .renv_lib
+  # explicitly, so inst should already be the installed copy — this is
+  # defence-in-depth against a future regression resurrecting find.package().)
+  inst_norm <- normalizePath(inst, mustWork = FALSE)
+  src_norms <- vapply(PACKAGES,
+                      function(p) normalizePath(file.path(ROOT, p), mustWork = FALSE),
+                      character(1L))
+  if (inst_norm %in% src_norms) {
+    warning(sprintf(
+      "heal[%s]: refusing to unlink %s — that's a source tree, not an install",
+      pkg, inst_norm), call. = FALSE)
+    return(invisible())
+  }
   message(sprintf("  HEAL  %-10s  (%s — reinstalling)", pkg, reason))
   try(unloadNamespace(pkg), silent = TRUE)
   unlink(inst, recursive = TRUE, force = TRUE)
@@ -115,8 +138,8 @@ pull_results <- vapply(PACKAGES, function(pkg) {
 for (pkg in PACKAGES) {
   src <- file.path(ROOT, pkg)
   if (!dir.exists(src)) next
-  inst <- tryCatch(find.package(pkg), error = function(e) character(0))
-  if (!length(inst)) next  # not installed yet — load_all below will handle
+  inst <- file.path(.renv_lib, pkg)
+  if (!dir.exists(inst)) next  # not installed yet — load_all below will handle
 
   # Help-DB drift: does the installed help index cover every source .Rd topic?
   src_topics <- sub("\\.Rd$", "",
@@ -149,7 +172,7 @@ for (pkg in PACKAGES) {
       .reinstall_pkg(pkg, inst, ".rdb corrupt", extra_args = "--no-byte-compile")
   }
 }
-rm(.reinstall_pkg)
+rm(.reinstall_pkg, .renv_lib)
 
 # ── 2. Document + reload all packages in dependency order ─────────────────────
 
@@ -158,6 +181,12 @@ message("\n── Documenting packages ─────────────�
 for (pkg in PACKAGES) {
   path <- file.path(ROOT, pkg)
   if (!dir.exists(path)) next
+  # Unload everything first so document() resolves @inheritParams /
+  # [pkg::topic()] links via each dependency's INSTALLED help DB rather than
+  # the in-memory dev namespace left over from a prior load_all (which has no
+  # help info and triggers "refers to unavailable topic" warnings). Iterate in
+  # reverse dependency order so dependents unload before their dependencies.
+  for (p in rev(PACKAGES)) try(pkgload::unload(p), silent = TRUE)
   tryCatch({
     devtools::document(path, quiet = TRUE)
     message(sprintf("  documented  %s", pkg))
