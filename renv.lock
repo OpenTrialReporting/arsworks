@@ -3244,13 +3244,7 @@
       "Package": "reactable",
       "Version": "0.4.5",
       "Source": "Repository",
-      "Type": "Package",
-      "Title": "Interactive Data Tables for R",
-      "Authors@R": "c( person(\"Greg\", \"Lin\", email = \"glin@glin.io\", role = c(\"aut\", \"cre\")), person(\"Tanner\", \"Linsley\", role = c(\"ctb\", \"cph\"), comment = \"React Table library\"), person(family = \"Emotion team and other contributors\", role = c(\"ctb\", \"cph\"), comment = \"Emotion library\"), person(\"Kent\", \"Russell\", role = c(\"ctb\", \"cph\"), comment = \"reactR package\"), person(\"Ramnath\", \"Vaidyanathan\", role = c(\"ctb\", \"cph\"), comment = \"htmlwidgets package\"), person(\"Joe\", \"Cheng\", role = c(\"ctb\", \"cph\"), comment = \"htmlwidgets package\"), person(\"JJ\", \"Allaire\", role = c(\"ctb\", \"cph\"), comment = \"htmlwidgets package\"), person(\"Yihui\", \"Xie\", role = c(\"ctb\", \"cph\"), comment = \"htmlwidgets package\"), person(\"Kenton\", \"Russell\", role = c(\"ctb\", \"cph\"), comment = \"htmlwidgets package\"), person(family = \"Facebook, Inc. and its affiliates\", role = c(\"ctb\", \"cph\"), comment = \"React library\"), person(family = \"FormatJS\", role = c(\"ctb\", \"cph\"), comment = \"FormatJS libraries\"), person(family = \"Feross Aboukhadijeh, and other contributors\", role = c(\"ctb\", \"cph\"), comment = \"buffer library\"), person(\"Roman\", \"Shtylman\", role = c(\"ctb\", \"cph\"), comment = \"process library\"), person(\"James\", \"Halliday\", role = c(\"ctb\", \"cph\"), comment = \"stream-browserify library\"), person(family = \"Posit Software, PBC\", role = c(\"fnd\", \"cph\")) )",
-      "Description": "Interactive data tables for R, based on the 'React Table' JavaScript library. Provides an HTML widget that can be used in 'R Markdown' or 'Quarto' documents, 'Shiny' applications, or viewed from an R console.",
-      "License": "MIT + file LICENSE",
-      "URL": "https://glin.github.io/reactable/, https://github.com/glin/reactable",
-      "BugReports": "https://github.com/glin/reactable/issues",
+      "Priority": null,
       "Depends": [
         "R (>= 3.1)"
       ],
@@ -3260,6 +3254,9 @@
         "htmlwidgets (>= 1.5.3)",
         "jsonlite",
         "reactR"
+      ],
+      "LinkingTo": [
+        null
       ],
       "Suggests": [
         "covr",
@@ -3276,13 +3273,16 @@
         "tippy",
         "V8"
       ],
-      "Encoding": "UTF-8",
-      "RoxygenNote": "7.2.1",
-      "Config/testthat/edition": "3",
+      "Enhances": [
+        null
+      ],
+      "License": "MIT + file LICENSE",
+      "License_is_FOSS": null,
+      "License_restricts_use": null,
+      "OS_type": null,
       "NeedsCompilation": "no",
-      "Author": "Greg Lin [aut, cre], Tanner Linsley [ctb, cph] (React Table library), Emotion team and other contributors [ctb, cph] (Emotion library), Kent Russell [ctb, cph] (reactR package), Ramnath Vaidyanathan [ctb, cph] (htmlwidgets package), Joe Cheng [ctb, cph] (htmlwidgets package), JJ Allaire [ctb, cph] (htmlwidgets package), Yihui Xie [ctb, cph] (htmlwidgets package), Kenton Russell [ctb, cph] (htmlwidgets package), Facebook, Inc. and its affiliates [ctb, cph] (React library), FormatJS [ctb, cph] (FormatJS libraries), Feross Aboukhadijeh, and other contributors [ctb, cph] (buffer library), Roman Shtylman [ctb, cph] (process library), James Halliday [ctb, cph] (stream-browserify library), Posit Software, PBC [fnd, cph]",
-      "Maintainer": "Greg Lin <glin@glin.io>",
-      "Repository": "CRAN"
+      "Repository": "CRAN",
+      "Type": "source"
     },
     "remotes": {
       "Package": "remotes",
@@ -4628,6 +4628,38 @@
       "Author": "Jim Hester [aut], Lionel Henry [aut, cre], Kirill Müller [aut], Kevin Ushey [aut], Hadley Wickham [aut], Winston Chang [aut], Jennifer Bryan [ctb], Richard Cotton [ctb], Posit Software, PBC [cph, fnd]",
       "Maintainer": "Lionel Henry <lionel@posit.co>",
       "Repository": "CRAN"
+    },
+    "writexl": {
+      "Package": "writexl",
+      "Version": "1.5.4",
+      "Source": "Repository",
+      "Priority": null,
+      "Depends": [
+        null
+      ],
+      "Imports": [
+        null
+      ],
+      "LinkingTo": [
+        null
+      ],
+      "Suggests": [
+        "spelling",
+        "readxl",
+        "nycflights13",
+        "testthat",
+        "bit64"
+      ],
+      "Enhances": [
+        null
+      ],
+      "License": "BSD_2_clause + file LICENSE",
+      "License_is_FOSS": null,
+      "License_restricts_use": null,
+      "OS_type": null,
+      "NeedsCompilation": "yes",
+      "Repository": "CRAN",
+      "Type": "source"
     },
     "xfun": {
       "Package": "xfun",
