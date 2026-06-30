@@ -24,6 +24,12 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          # The six ars* packages are PRIVATE submodules; the default
+          # GITHUB_TOKEN can't clone other repos. SUBMODULES_PAT grants
+          # cross-repo read access so their sources are present for the build.
+          submodules: recursive
+          token: ${{ secrets.SUBMODULES_PAT }}
 
       # OCI registries require lowercase repository names, but ${{ github.repository }}
       # preserves org/repo casing (e.g. "OpenTrialReporting/arsworks"). Lowercase it once
