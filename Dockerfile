@@ -23,13 +23,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     r-cran-devtools \
     r-cran-shiny \
     r-cran-pkgdown \
-    r-cran-cards \
     r-cran-officer \
-    r-cran-webshot2 \
     && rm -rf /var/lib/apt/lists/*
 
-# NOTE: webshot2 above provides the R interface only. Rendering gt/Shiny output
-# to images at runtime additionally requires a headless Chrome (driven via the
+# arsstudio also needs cards + webshot2, which are NOT in the r2u/apt set for
+# this base image (only officer is). Install them via R: dependencies resolve
+# to apt/r2u binaries where available and the two leaf packages build from
+# source (both NeedsCompilation=no, so this is cheap on Linux/gcc — no compiler
+# trouble here, unlike the host toolchain).
+RUN Rscript -e 'options(repos = c(CRAN = "https://cloud.r-project.org")); install.packages(c("cards", "webshot2"))'
+
+# NOTE: webshot2 provides the R interface only. Rendering gt/Shiny output to
+# images at runtime additionally requires a headless Chrome (driven via the
 # chromote package). It is intentionally NOT installed here to keep the image
 # lean — add a `google-chrome-stable`/`chromium` apt package if arsstudio's
 # screenshot paths need to execute in-container (e.g. snapshot tests).
