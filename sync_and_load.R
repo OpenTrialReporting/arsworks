@@ -122,17 +122,58 @@ pull_results <- vapply(PACKAGES, function(pkg) {
     return(invisible())
   }
   message(sprintf("  HEAL  %-10s  (%s — reinstalling)", pkg, reason))
-  try(unloadNamespace(pkg), silent = TRUE)
-  unlink(inst, recursive = TRUE, force = TRUE)
+
+  lib  <- dirname(inst)
+  Rbin <- file.path(R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "R")
+
+  # Install-then-swap: build the fresh copy into a staging library FIRST, and
+  # only replace the existing install once it succeeds. The previous behaviour
+  # unlink()ed the install before reinstalling, so any failed reinstall (e.g.
+  # the old R.exe-not-found bug) left the package deleted. The stage lives
+  # inside `lib` so it shares a filesystem with the target and the final move
+  # is atomic; the dependency search path (R_LIBS=lib) lets the install's
+  # test-load resolve sibling sub-packages already in `lib`.
+  stage <- file.path(lib, paste0(".heal-stage-", pkg))
+  unlink(stage, recursive = TRUE, force = TRUE)
+  dir.create(stage, showWarnings = FALSE, recursive = TRUE)
+  on.exit(unlink(stage, recursive = TRUE, force = TRUE), add = TRUE)
+
   status <- system2(
-    file.path(R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "R"),
+    Rbin,
     c("CMD", "INSTALL", extra_args,
-      paste0("--library=", shQuote(dirname(inst))),
+      paste0("--library=", shQuote(stage)),
       shQuote(file.path(ROOT, pkg))),
+    env = paste0("R_LIBS=", lib),
     stdout = FALSE, stderr = FALSE
   )
-  if (!identical(status, 0L))
-    warning(sprintf("%s reinstall failed (status %s)", pkg, status))
+
+  staged <- file.path(stage, pkg)
+  if (!identical(status, 0L) || !dir.exists(staged)) {
+    warning(sprintf("%s reinstall failed (status %s) — keeping existing install",
+                    pkg, status), call. = FALSE)
+    return(invisible())
+  }
+
+  # Fresh copy is ready: swap it in with rollback safety. Move the old install
+  # aside (atomic rename), move the new one into place, then drop the backup;
+  # if the second move fails, restore the backup so we never end up with no
+  # installed copy.
+  try(unloadNamespace(pkg), silent = TRUE)
+  backup <- paste0(inst, ".heal-old")
+  unlink(backup, recursive = TRUE, force = TRUE)
+  if (dir.exists(inst) && !file.rename(inst, backup)) {
+    warning(sprintf("%s: could not move existing install aside — keeping it",
+                    pkg), call. = FALSE)
+    return(invisible())
+  }
+  if (file.rename(staged, inst)) {
+    unlink(backup, recursive = TRUE, force = TRUE)
+  } else if (dir.exists(backup) && !dir.exists(inst)) {
+    file.rename(backup, inst)            # restore previous install
+    warning(sprintf("%s: could not install healed copy — kept previous install",
+                    pkg), call. = FALSE)
+  }
+  invisible()
 }
 
 for (pkg in PACKAGES) {
