@@ -12,13 +12,16 @@ FROM rocker/r-ubuntu:latest
 LABEL maintainer="Lovemore Gakava <Lovemore.Gakava@gmail.com>"
 LABEL description="arsworks: ARS Reporting Suite (arscore, arsshells, arsresult, arstlf, ars, arsstudio)"
 
-# Disable renv inside the image. The project's renv setup targets R 4.6 with a
-# host-specific lockfile; this CI image is whatever R rocker/r-ubuntu ships and
-# uses the system/r2u library instead. Without this, renv/activate.R (pulled in
-# by COPY . .) activates an EMPTY project library on every R startup in
-# /workspace, shadowing the packages installed below — which previously made
-# `devtools::test()` silently fail with "there is no package called 'devtools'".
-ENV RENV_CONFIG_ACTIVATE_PROJECT=FALSE
+# Disable the renv autoloader inside the image. The project's renv setup targets
+# R 4.6 with a host-specific lockfile; this CI image is whatever R rocker/r-ubuntu
+# ships and uses the system/r2u library instead. Without this, renv/activate.R
+# (pulled in by COPY . . and sourced from .Rprofile on every R startup in
+# /workspace) activates an EMPTY project library, shadowing the packages
+# installed below — which made R fail with "there is no package called 'devtools'".
+# NOTE: the var must be one of the names activate.R actually checks
+# (RENV_CONFIG_AUTOLOADER_ENABLED / RENV_AUTOLOADER_ENABLED / RENV_ACTIVATE_PROJECT);
+# RENV_CONFIG_ACTIVATE_PROJECT is NOT one of them.
+ENV RENV_CONFIG_AUTOLOADER_ENABLED=FALSE
 
 # System libraries + a few R packages via r2u apt binaries (fast). r2u also
 # pulls the matching system libraries (libcurl, libssl, libxml2, libgit2, ...)
