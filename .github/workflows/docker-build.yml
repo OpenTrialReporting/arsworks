@@ -54,17 +54,16 @@ jobs:
 
       - name: Run tests in Docker
         run: |
+          set -o pipefail
+          # The gate is run_tests.R's exit code (preserved through the pipe by
+          # pipefail), NOT a text grep. run_tests.R exits non-zero on any test
+          # failure, error, or package that fails to load — so a crash can no
+          # longer masquerade as success.
           docker run --rm \
-            -v $(pwd):/workspace \
+            --entrypoint Rscript \
+            -v "$(pwd):/workspace" \
             ${{ env.IMAGE_NAME }}:latest \
-            -e "devtools::test()" 2>&1 | tee test-results.log
-          
-          # Check for failures
-          if grep -i "failed" test-results.log; then
-            echo "❌ Tests failed"
-            exit 1
-          fi
-          echo "✅ All tests passed"
+            run_tests.R 2>&1 | tee test-results.log
 
       - name: Push image to registry
         if: github.event_name != 'pull_request' && success()
