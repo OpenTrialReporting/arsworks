@@ -16,6 +16,21 @@
 
 local_pkgs <- c("arscore", "arsshells", "arsresult", "arstlf", "ars", "arsstudio")
 
+# Retry helper for network-bound steps. The bspm/apt binary fetch occasionally
+# fails transiently (mirror hiccup), surfacing as an empty `Error:` that halts
+# the build. Retrying the whole batch is idempotent — already-installed packages
+# are skipped, so only the missing ones are re-fetched.
+with_retries <- function(fn, what, tries = 3L, wait = 10L) {
+  for (i in seq_len(tries)) {
+    err <- tryCatch({ fn(); NULL }, error = function(e) e)
+    if (is.null(err)) return(invisible(TRUE))
+    cat(sprintf("  %s: attempt %d/%d failed: %s\n",
+                what, i, tries, conditionMessage(err)))
+    if (i < tries) { cat(sprintf("  retrying in %ds...\n", wait)); Sys.sleep(wait) }
+  }
+  stop(sprintf("%s failed after %d attempts", what, tries), call. = FALSE)
+}
+
 # --- 1. Collect declared CRAN dependencies across the six sub-packages --------
 parse_deps <- function(p) {
   d <- read.dcf(file.path(p, "DESCRIPTION"))
@@ -30,7 +45,8 @@ deps <- setdiff(deps, c(local_pkgs, "R"))        # not the local pkgs, not base 
 deps <- union(deps, c("devtools", "testthat"))   # needed by run_tests.R
 
 cat(sprintf("Installing %d CRAN dependencies as r2u binaries (via bspm)...\n", length(deps)))
-install.packages(deps)                           # bspm -> apt/r2u binaries
+with_retries(function() install.packages(deps),  # bspm -> apt/r2u binaries
+             what = "CRAN dependency install")
 
 # --- 2. Install the six local packages from source, in dependency order -------
 Rbin <- file.path(R.home("bin"), "R")
