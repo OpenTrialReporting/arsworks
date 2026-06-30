@@ -265,12 +265,16 @@ If you are behind a corporate proxy, configure git first:
 git config --global http.proxy http://proxy.example.com:8080
 ```
 
-### `renv::restore()` fails with "failed to retrieve package 'ars@0.1.0'"
+### `renv::restore()` fails trying to fetch a local `ars*` package from CRAN
 
-This means `renv.lock` still has `ars` listed as `"Source": "Repository"`.
-Re-run the bootstrap script — it patches this automatically. Or fix it manually
-by opening `renv.lock`, finding the `"ars"` block, and changing
-`"Source": "Repository"` to `"Source": "unknown"`.
+The six local packages (`ars`, `arscore`, `arsshells`, `arsresult`, `arstlf`,
+`arsstudio`) are **not** tracked in `renv.lock` — they're listed in renv's
+`ignored.packages` (see `renv/settings.json`) and built from the submodule
+sources by `bootstrap.R`. A normal `renv::restore()` therefore only installs
+CRAN dependencies and leaves the local packages alone. If you hit this error,
+you're likely on a stale `renv.lock` from before that change — pull the latest
+and re-run `source("setup.R")` (or `source("bootstrap.R")`), which restores
+with the local packages excluded.
 
 ### A sub-package fails to install with "dependencies not available"
 
