@@ -54,7 +54,7 @@ adae$AETOXGR <- dplyr::recode_values(
   "MILD"     ~ "1",
   "MODERATE" ~ "2",
   "SEVERE"   ~ "3",
-  .default   = NA_character_
+  default    = NA_character_   # dplyr >= 1.2 renamed case_match()'s `.default` to `default`
 )
 
 # AEACN: not populated in pharmaverseadam; set to "DOSE NOT CHANGED" as default

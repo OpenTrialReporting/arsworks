@@ -125,7 +125,7 @@ pull_results <- vapply(PACKAGES, function(pkg) {
   try(unloadNamespace(pkg), silent = TRUE)
   unlink(inst, recursive = TRUE, force = TRUE)
   status <- system2(
-    file.path(R.home("bin"), "R.exe"),
+    file.path(R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "R"),
     c("CMD", "INSTALL", extra_args,
       paste0("--library=", shQuote(dirname(inst))),
       shQuote(file.path(ROOT, pkg))),
