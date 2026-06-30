@@ -1,4 +1,4 @@
-# Development image for arsworks (5-package suite)
+# Development image for arsworks (6-package suite)
 # Build: docker build -t arsworks:dev .
 # Run:   docker run -it --rm -v $(pwd):/workspace arsworks:dev
 #
@@ -9,7 +9,7 @@
 FROM rocker/r-ubuntu:latest
 
 LABEL maintainer="Lovemore Gakava <Lovemore.Gakava@gmail.com>"
-LABEL description="arsworks: ARS Reporting Suite (arscore, arsshells, arsresult, arstlf, ars)"
+LABEL description="arsworks: ARS Reporting Suite (arscore, arsshells, arsresult, arstlf, ars, arsstudio)"
 
 # Install system dependencies AND R packages via r2u (pre-compiled binaries).
 # rocker/r-ubuntu ships with r2u preconfigured, so r-cran-* packages install
@@ -23,7 +23,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     r-cran-devtools \
     r-cran-shiny \
     r-cran-pkgdown \
+    r-cran-cards \
+    r-cran-officer \
+    r-cran-webshot2 \
     && rm -rf /var/lib/apt/lists/*
+
+# NOTE: webshot2 above provides the R interface only. Rendering gt/Shiny output
+# to images at runtime additionally requires a headless Chrome (driven via the
+# chromote package). It is intentionally NOT installed here to keep the image
+# lean — add a `google-chrome-stable`/`chromium` apt package if arsstudio's
+# screenshot paths need to execute in-container (e.g. snapshot tests).
 
 # Set working directory
 WORKDIR /workspace
