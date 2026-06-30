@@ -23,17 +23,12 @@ LABEL description="arsworks: ARS Reporting Suite (arscore, arsshells, arsresult,
 # RENV_CONFIG_ACTIVATE_PROJECT is NOT one of them.
 ENV RENV_CONFIG_AUTOLOADER_ENABLED=FALSE
 
-# System libraries + a few R packages via r2u apt binaries (fast). r2u also
-# pulls the matching system libraries (libcurl, libssl, libxml2, libgit2, ...)
-# automatically as dependencies of their corresponding r-cran-* packages.
+# Minimal system tooling. r2u/bspm pulls each R package's system libraries
+# (libcurl, libssl, libxml2, libgit2, ...) automatically when install_suite.R
+# installs the corresponding r-cran-* binaries below.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
-    vim \
-    curl \
-    r-cran-devtools \
-    r-cran-shiny \
-    r-cran-pkgdown \
-    r-cran-officer \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workspace
@@ -42,26 +37,12 @@ WORKDIR /workspace
 # NAMESPACE/DESCRIPTION) so dependencies can be resolved from DESCRIPTION.
 COPY . .
 
-# Install the suite's full dependency set, then the six sub-packages themselves
-# in dependency order (arscore -> ... -> arsstudio) so each package's local
-# Imports are already present when the next one installs. We deliberately do NOT
-# override `repos`: the base image preconfigures r2u, so install.packages()
-# resolves dependencies to apt/r2u binaries (via bspm) instead of compiling from
-# source. Packages absent from r2u (e.g. cards, webshot2) fall back to source,
-# but both are NeedsCompilation=no so that is cheap. Suggests are included so
-# testthat and friends are available for `run_tests.R`.
-RUN Rscript -e 'pkgs <- c("arscore","arsshells","arsresult","arstlf","ars","arsstudio"); \
-      for (p in pkgs) devtools::install(p, dependencies = TRUE, upgrade = "never", quick = TRUE)'
-
-# NOTE: webshot2 (an arsstudio dep, installed above) provides the R interface
-# only. Rendering gt/Shiny output to images at runtime additionally requires a
-# headless Chrome (driven via the chromote package). It is intentionally NOT
-# installed here to keep the image lean — add a `google-chrome-stable`/
-# `chromium` apt package if arsstudio's screenshot paths need to run in-container.
-
-# Verify all six packages import cleanly from the system library.
-RUN Rscript -e 'for (p in c("arscore","arsshells","arsresult","arstlf","ars","arsstudio")) { \
-      suppressPackageStartupMessages(library(p, character.only = TRUE)); cat("loaded", p, "\n") }'
+# Install the suite: CRAN dependencies as r2u binaries (install.packages is
+# bridged to apt by bspm), then the six local packages from source in dependency
+# order. install_suite.R deliberately avoids devtools::install for the dep tree,
+# which would bypass bspm and compile everything from source. Also verifies all
+# six load before the image is considered built.
+RUN Rscript install_suite.R
 
 # Create volume mount point for live development
 VOLUME ["/workspace"]
