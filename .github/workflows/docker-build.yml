@@ -5,9 +5,18 @@ on:
     branches:
       - main
       - develop
+    # Skip the image build/test for docs-only changes (nothing here affects the
+    # Docker image or the suite tests). A push touching any non-ignored file
+    # still runs. workflow_dispatch always runs regardless of paths.
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
   pull_request:
     branches:
       - main
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
   workflow_dispatch:
 
 env:
