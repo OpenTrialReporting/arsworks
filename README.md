@@ -184,6 +184,69 @@ browse_shells()
 
 ---
 
+## Docker image
+
+Every green build on `main` publishes a ready-to-run image to the GitHub
+Container Registry with all six packages and their dependencies pre-installed.
+It's built by the `Docker Build & Test` workflow on a
+[`rocker/r2u`](https://rocker-project.org/images/versioned/r2u.html) base (so R
+package installs come from apt/r2u binaries, not source). The entrypoint is `R`
+and the working directory is `/workspace`.
+
+> The image is private (the `arsworks` repo is private), so pulling it requires
+> a GitHub token with the `read:packages` scope.
+
+### 1. Authenticate (one-time)
+
+```bash
+echo "$GITHUB_TOKEN" | docker login ghcr.io -u <your-gh-username> --password-stdin
+```
+
+### 2. Pull
+
+```bash
+docker pull ghcr.io/opentrialreporting/arsworks:latest
+# or pin a specific commit (every build is also tagged with its SHA):
+docker pull ghcr.io/opentrialreporting/arsworks:<commit-sha>
+```
+
+### 3. Run
+
+```bash
+# Interactive R session — all six packages are already installed
+docker run -it --rm ghcr.io/opentrialreporting/arsworks:latest
+
+# Run a script against your working copy (mounted over /workspace)
+docker run --rm --entrypoint Rscript \
+  -v "$(pwd):/workspace" \
+  ghcr.io/opentrialreporting/arsworks:latest my_analysis.R
+
+# Run the suite test runner (the same command CI uses)
+docker run --rm --entrypoint Rscript \
+  -v "$(pwd):/workspace" \
+  ghcr.io/opentrialreporting/arsworks:latest run_tests.R
+```
+
+### Notes
+
+- **renv is disabled inside the image** (`RENV_CONFIG_AUTOLOADER_ENABLED=FALSE`),
+  so R uses the container's system library rather than `renv.lock`. The image
+  *is* the pinned environment.
+- The six `ars*` packages are **installed** (not dev-loaded), so `library()` and
+  cross-package calls work immediately. To exercise in-development edits, mount
+  your source and use `devtools::load_all()` / `run_tests.R`.
+- **amd64 only.** It runs under emulation on Apple Silicon; an arm64 image (e.g.
+  for `rk3` deployment) needs a separate arm64 r2u build.
+
+### Build it locally
+
+```bash
+git submodule update --init --recursive   # the image bakes in the sub-package sources
+docker build -t arsworks:dev .
+```
+
+---
+
 ## Troubleshooting
 
 ### Submodule directories are empty after cloning
