@@ -44,12 +44,13 @@ COPY . .
 
 # Install the suite's full dependency set, then the six sub-packages themselves
 # in dependency order (arscore -> ... -> arsstudio) so each package's local
-# Imports are already present when the next one installs. Dependencies resolve
-# to r2u/apt binaries where available (via bspm) and build from source
-# otherwise (e.g. cards, webshot2 — both NeedsCompilation=no, cheap on Linux).
-# Suggests are included so testthat and friends are available for `run_tests.R`.
-RUN Rscript -e 'options(repos = c(CRAN = "https://cloud.r-project.org")); \
-      pkgs <- c("arscore","arsshells","arsresult","arstlf","ars","arsstudio"); \
+# Imports are already present when the next one installs. We deliberately do NOT
+# override `repos`: the base image preconfigures r2u, so install.packages()
+# resolves dependencies to apt/r2u binaries (via bspm) instead of compiling from
+# source. Packages absent from r2u (e.g. cards, webshot2) fall back to source,
+# but both are NeedsCompilation=no so that is cheap. Suggests are included so
+# testthat and friends are available for `run_tests.R`.
+RUN Rscript -e 'pkgs <- c("arscore","arsshells","arsresult","arstlf","ars","arsstudio"); \
       for (p in pkgs) devtools::install(p, dependencies = TRUE, upgrade = "never", quick = TRUE)'
 
 # NOTE: webshot2 (an arsstudio dep, installed above) provides the R interface
