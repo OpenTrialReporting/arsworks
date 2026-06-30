@@ -1,7 +1,13 @@
 {
   "bioconductor.version": null,
   "external.libraries": [],
-  "ignored.packages": [],
+  "ignored.packages": [
+    "ars",
+    "arscore",
+    "arsresult",
+    "arsshells",
+    "arstlf"
+  ],
   "package.dependency.fields": [
     "Imports",
     "Depends",
