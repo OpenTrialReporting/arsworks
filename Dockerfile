@@ -3,17 +3,22 @@
 # Run:   docker run -it --rm -v $(pwd):/workspace arsworks:dev
 # Test:  docker run --rm --entrypoint Rscript -v $(pwd):/workspace arsworks:dev run_tests.R
 #
-# Strategy: Uses rocker/r-ubuntu (pre-compiled R packages via r2u) for fast
-# builds. CI/CD: GitHub Actions builds on x86, pushes to ghcr.io.
+# Strategy: Uses rocker/r2u, which enables bspm so install.packages() resolves
+# ALL of CRAN to apt binaries (no source compilation). rocker/r-ubuntu only
+# exposes the r2u apt repo WITHOUT bspm, so R-level installs there compiled from
+# source and failed — hence r2u here.
+# CI/CD: GitHub Actions builds on x86, pushes to ghcr.io.
 # Deployment: rk3 pulls pre-built image (instant, no compilation).
+# NOTE: this CI build targets amd64; an arm64 deployment image for rk3 would
+# need a separate arm64 r2u build (r2u publishes noble arm64 binaries).
 
-FROM rocker/r-ubuntu:latest
+FROM rocker/r2u:latest
 
 LABEL maintainer="Lovemore Gakava <Lovemore.Gakava@gmail.com>"
 LABEL description="arsworks: ARS Reporting Suite (arscore, arsshells, arsresult, arstlf, ars, arsstudio)"
 
 # Disable the renv autoloader inside the image. The project's renv setup targets
-# R 4.6 with a host-specific lockfile; this CI image is whatever R rocker/r-ubuntu
+# R 4.6 with a host-specific lockfile; this CI image is whatever R rocker/r2u
 # ships and uses the system/r2u library instead. Without this, renv/activate.R
 # (pulled in by COPY . . and sourced from .Rprofile on every R startup in
 # /workspace) activates an EMPTY project library, shadowing the packages
