@@ -6,6 +6,7 @@
     "arscore",
     "arsresult",
     "arsshells",
+    "arsstudio",
     "arstlf"
   ],
   "package.dependency.fields": [
